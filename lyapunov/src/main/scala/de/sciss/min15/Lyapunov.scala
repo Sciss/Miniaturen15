@@ -17,9 +17,11 @@ package de.sciss.min15
 import java.awt.{RenderingHints, Cursor, Color}
 import java.awt.geom.{Point2D, AffineTransform}
 import java.awt.image.BufferedImage
-import javax.swing.UIManager
+import javax.imageio.ImageIO
+import javax.swing.{KeyStroke, UIManager}
 
 import de.sciss.audiowidgets.Axis
+import de.sciss.desktop.{OptionPane, FileDialog}
 import de.sciss.dsp.FastLog
 import de.sciss.guiflitz.AutoView
 import de.sciss.intensitypalette.IntensityPalette
@@ -33,7 +35,7 @@ import scala.collection.breakOut
 import scala.concurrent.ExecutionContext
 import scala.swing.Swing._
 import scala.swing.event.{MouseDragged, MouseReleased, MousePressed, MouseEvent, MouseMoved, MouseExited, MouseEntered, ButtonClicked}
-import scala.swing.{Point, BorderPanel, BoxPanel, Button, Component, Frame, Graphics2D, Orientation}
+import scala.swing.{ProgressBar, Action, MenuItem, Menu, MenuBar, FlowPanel, Point, BorderPanel, BoxPanel, Button, Component, Frame, Graphics2D, Orientation}
 import scala.util.control.NonFatal
 import scala.util.{Failure, Success}
 
@@ -89,11 +91,12 @@ object Lyapunov {
     avCfg.small = true
 
     val lyaCfg0 = LyaConfig(aMin = 0 * 1000, aMax = 4 * 1000, bMin = 0 * 1000, bMax = 4 * 1000,
-      seq = "AABBAAB", width = iw, height = ih, N = 1000)
-    val colrCfg0 = ColorConfig(min = -0.5, max = 0.45, invert = true)
+      seq = "AABBAAB", width = 2048, height = 2048, N = 1000)
+    val colrCfg0 = ColorConfig(min = -0.5, max = 0.45, invert = true, noise = 0.0, thresh = 0.0)
 
     val lyaCfgView  = AutoView(lyaCfg0 , avCfg)
     val colrCfgView = AutoView(colrCfg0, avCfg)
+    val statsView   = AutoView(Stats(0.0, 0.0), avCfg)
 
     def updateAxes(cfg: LyaConfig): Unit = {
       hAxis1.minimum  = cfg.aMin
@@ -110,6 +113,21 @@ object Lyapunov {
 
     val progIcon = new ProgressIcon()
     val ggRender = new Button("Render")
+    ggRender.preferredSize = {
+      val d = ggRender.preferredSize
+      d.width += 48
+      d
+    }
+    ggRender.minimumSize  = ggRender.preferredSize
+    ggRender.maximumSize  = ggRender.preferredSize
+
+    val ggNormalize = Button("Normalize") {
+      val stats = statsView.cell()
+      val c     = colrCfgView.cell
+      val c0    = c()
+      val c1    = c0.copy(min = if (stats.min.isInfinity) stats.max - 10 else stats.min, max = stats.max)
+      c()       = c1
+    }
 
     val comp: Component = new Component {
       preferredSize = (iw, ih)
@@ -143,10 +161,14 @@ object Lyapunov {
       private var mDrag : MouseEvent = _
 
       private def setCell(v1: Point2D, v2: Point2D): Unit = {
-        val c   = lyaCfgView.cell
-        val c0  = c()
-        val c1  = c0.copy(aMin = v1.getX, aMax = v2.getX, bMin = v1.getY, bMax = v2.getY)
-        c()     = c1
+        val c     = lyaCfgView.cell
+        val c0    = c()
+        val xMin  = math.min(v1.getX, v2.getX)
+        val xMax  = math.max(v1.getX, v2.getX)
+        val yMin  = math.min(v1.getY, v2.getY)
+        val yMax  = math.max(v1.getY, v2.getY)
+        val c1    = c0.copy(aMin = xMin, aMax = xMax, bMin = yMin, bMax = yMax)
+        c()       = c1
       }
 
       reactions += {
@@ -229,7 +251,7 @@ object Lyapunov {
       val g       = img.createGraphics()
       g.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BILINEAR)
       val colrCfg = colrCfgView.cell()
-      val img1    = mkImage(data, colrMin = colrCfg.min, colrMax = colrCfg.max, invert = colrCfg.invert)
+      val img1    = mkImage(data, cfg = colrCfg)
       val scale   = AffineTransform.getScaleInstance(iw.toDouble / 320 /* lyaCfg.width */, ih.toDouble / 320 /* lyaCfg.height */)
       g.drawImage(img1, scale, null)
       // g.drawImage(img1, 0, 0, null)
@@ -244,6 +266,7 @@ object Lyapunov {
             ggRender.icon = null
             res match {
               case Success(data) =>
+                statsView.cell() = data.stats
                 updateColors1(lyaCfg, data)
                 updateAxes(lyaCfg)
               case Failure(ex) =>
@@ -312,21 +335,64 @@ object Lyapunov {
       }, BorderPanel.Position.South )
       add(vAxis2, BorderPanel.Position.East  )
     }
-    val f = new Frame { self =>
+
+    val mb = new MenuBar {
+      contents += new Menu("File") {
+        contents += new MenuItem(new Action("Export Image...") {
+          accelerator = Some(KeyStroke.getKeyStroke("ctrl S"))
+          def apply(): Unit = {
+            FileDialog.save().show(None).foreach { f =>
+              val ggProg = new ProgressBar
+              val ggAbort = new Button("Abort")
+              val opt = OptionPane(message = ggProg, messageType = OptionPane.Message.Plain, entries = Seq(ggAbort))
+              val lyaCfg = lyaCfgView.cell()
+              import ExecutionContext.Implicits.global
+              val pFull  = Processor[Result]("calc") { self =>
+                calc(self, lyaCfg.toLyaConfig1(fast = false))
+              }
+              val colrCfg = colrCfgView.cell()
+              val futOut = pFull.map { res =>
+                val img = mkImage(res, colrCfg)
+                ImageIO.write(img, "png", f)
+              }
+              val optPeer = opt.peer
+              val dlg = optPeer.createDialog("Exporting...")
+              ggAbort.listenTo(ggAbort)
+              ggAbort.reactions += {
+                case ButtonClicked(_) =>
+                  pFull.abort()
+              }
+              futOut.onComplete(_ => onEDT(dlg.dispose()))
+              futOut.onFailure {
+                case ex => ex.printStackTrace()
+              }
+              pFull.addListener {
+                case prog @ Processor.Progress(_, _) => onEDT(ggProg.value = prog.toInt)
+              }
+              dlg.setVisible(true)
+            }
+          }
+        })
+      }
+    }
+
+    val fr = new Frame { self =>
       title = "Lyapunov"
       contents = new BorderPanel {
         add(bp, BorderPanel.Position.Center)
         add(new BoxPanel(Orientation.Vertical) {
           contents += lyaCfgView .component
           contents += colrCfgView.component
-          contents += ggRender
+          contents += statsView  .component
+          contents += new FlowPanel(ggRender, ggNormalize)
         }, BorderPanel.Position.East)
       }
       resizable = false
+      menuBar = mb
       pack().centerOnScreen()
       open()
     }
-    f.defaultCloseOperation = CloseOperation.Exit
+    fr.defaultCloseOperation = CloseOperation.Exit
 
     ggRender.doClick()
   }
@@ -340,27 +406,33 @@ object Lyapunov {
         seq = stringToSeq(seq), width = if (fast) 320 else width, height = if (fast) 320 else height, N = N)
   }
 
-  case class ColorConfig(min: Double, max: Double, invert: Boolean)
+  case class ColorConfig(min: Double, max: Double, invert: Boolean, noise: Double, thresh: Double)
 
   case class LyaConfig1(aMin: Double, aMax: Double, bMin: Double, bMax: Double,
                         seq: Vector[Double], width: Int, height: Int, N: Int)
 
-  case class Result(data: Array[Array[Double]], min: Double, max: Double)
+  case class Stats(min: Double, max: Double)
 
-  def mkImage(res: Result, colrMin: Double, colrMax: Double, invert: Boolean): BufferedImage = {
+  case class Result(data: Array[Array[Double]], stats: Stats)
+
+  def mkImage(res: Result, cfg: ColorConfig): BufferedImage = {
     import res.data
-    val height = data.length
-    val width  = data(0).length
-    val img = new BufferedImage(width, height, BufferedImage.TYPE_INT_ARGB)
-    val g = img.createGraphics()
+    import cfg._
+    val height    = data.length
+    val width     = data(0).length
+    val img       = new BufferedImage(width, height, if (thresh > 0) BufferedImage.TYPE_BYTE_BINARY else BufferedImage.TYPE_INT_ARGB)
+    val g         = img.createGraphics()
+    val noiseAmt  = if (noise <= 0) 0.0 else (noise - 50) * 0.01
     var yi = 0
     while (yi < height) {
       var xi = 0
       while (xi < width) {
         import numbers.Implicits._
         val lambda0 = data(yi)(xi)
-        val lambda1 = lambda0.linlin(colrMin, colrMax, 0, 1).clip(0, 1)
-        val lambda  = if (invert) 1 - lambda1 else lambda1
+        val lambda1 = lambda0.linlin(min, max, 0, 1).clip(0, 1)
+        val lambda2 = if (invert) 1 - lambda1 else lambda1
+        val lambda3 = if (noiseAmt != 0) math.random * noiseAmt + lambda2 else lambda2
+        val lambda  = if (thresh > 0) { if (lambda3 > thresh * 0.01) 1.0 else 0.0 } else lambda3
         val rgb = IntensityPalette.apply(lambda.toFloat)
         g.setColor(new Color(rgb))
         g.fillRect(xi, height - yi - 1, 1, 1)
@@ -429,6 +501,6 @@ object Lyapunov {
 
     // println(s"min = $lMin, max = $lMax")
 
-    Result(data = arr, min = lMin, max = lMax)
+    Result(data = arr, stats = Stats(min = lMin, max = lMax))
   }
 }

@@ -38,7 +38,7 @@ lazy val lyapunov = Project(id = s"$baseNameL-lyapunov", base = file("lyapunov")
       "de.sciss" %% "fileutil"           % "1.1.1",
       "de.sciss" %% "scissdsp"           % "1.2.2",
       "de.sciss" %% "audiowidgets-swing" % "1.9.1",
-      "de.sciss" %% "guiflitz"           % "0.5.0"
+      "de.sciss" %% "guiflitz"           % "0.5.0",
+      "de.sciss" %% "desktop"            % "0.7.1"
     )
   )
-
