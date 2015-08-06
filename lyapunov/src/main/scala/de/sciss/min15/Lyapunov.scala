@@ -17,16 +17,19 @@ package de.sciss.min15
 import java.awt.{RenderingHints, Cursor, Color}
 import java.awt.geom.{Point2D, AffineTransform}
 import java.awt.image.BufferedImage
+import java.io.FileOutputStream
 import javax.imageio.ImageIO
 import javax.swing.{KeyStroke, UIManager}
 
 import de.sciss.audiowidgets.Axis
 import de.sciss.desktop.{OptionPane, FileDialog}
 import de.sciss.dsp.FastLog
+import de.sciss.file._
 import de.sciss.guiflitz.AutoView
 import de.sciss.intensitypalette.IntensityPalette
 import de.sciss.model.Model
 import de.sciss.numbers
+import de.sciss.play.json.AutoFormat
 import de.sciss.processor.Processor
 import de.sciss.swingplus.CloseOperation
 import de.sciss.swingplus.Implicits._
@@ -128,6 +131,29 @@ object Lyapunov {
       val c1    = c0.copy(min = if (stats.min.isInfinity) stats.max - 10 else stats.min, max = stats.max)
       c()       = c1
     }
+
+    def mkSituation(): Situation =
+      Situation(lyaCfgView.cell(), colrCfgView.cell())
+
+    class SituationView(name: String) {
+      var situation = mkSituation()
+
+      val ggSave = Button(s"> $name") {
+        situation = mkSituation()
+      }
+      ggSave.tooltip = s"Store Settings $name"
+
+      val ggLoad = Button(s"< $name") {
+        lyaCfgView .cell() = situation.lya
+        colrCfgView.cell() = situation.color
+      }
+      ggLoad.tooltip = s"Recall Settings $name"
+
+      val component = new FlowPanel(ggSave, ggLoad)
+    }
+
+    val sitA    = new SituationView("A")
+    val sitB    = new SituationView("B")
 
     val comp: Component = new Component {
       preferredSize = (iw, ih)
@@ -342,18 +368,22 @@ object Lyapunov {
           accelerator = Some(KeyStroke.getKeyStroke("ctrl S"))
           def apply(): Unit = {
             FileDialog.save().show(None).foreach { f =>
-              val ggProg = new ProgressBar
+              val ggProg  = new ProgressBar
               val ggAbort = new Button("Abort")
-              val opt = OptionPane(message = ggProg, messageType = OptionPane.Message.Plain, entries = Seq(ggAbort))
-              val lyaCfg = lyaCfgView.cell()
+              val opt     = OptionPane(message = ggProg, messageType = OptionPane.Message.Plain, entries = Seq(ggAbort))
+              val sit     = mkSituation()
+
               import ExecutionContext.Implicits.global
               val pFull  = Processor[Result]("calc") { self =>
-                calc(self, lyaCfg.toLyaConfig1(fast = false))
+                calc(self, sit.lya.toLyaConfig1(fast = false))
               }
-              val colrCfg = colrCfgView.cell()
               val futOut = pFull.map { res =>
-                val img = mkImage(res, colrCfg)
-                ImageIO.write(img, "png", f)
+                val img = mkImage(res, sit.color)
+                ImageIO.write(img, "png", f.replaceExt("png"))
+                val json = Situation.format.writes(sit).toString()
+                val jsonOut = new FileOutputStream(f.replaceExt("json"))
+                jsonOut.write(json.getBytes("UTF-8"))
+                jsonOut.close()
               }
               val optPeer = opt.peer
               val dlg = optPeer.createDialog("Exporting...")
@@ -384,7 +414,7 @@ object Lyapunov {
           contents += lyaCfgView .component
           contents += colrCfgView.component
           contents += statsView  .component
-          contents += new FlowPanel(ggRender, ggNormalize)
+          contents += new FlowPanel(ggRender, ggNormalize, sitA.component, sitB.component)
         }, BorderPanel.Position.East)
       }
       resizable = false
@@ -399,6 +429,9 @@ object Lyapunov {
 
   def stringToSeq(s: String): Vector[Double] = s.map(c => if (c == 'A') 0.0 else 1.0)(breakOut)
 
+  object LyaConfig {
+    implicit val format = AutoFormat[LyaConfig]
+  }
   case class LyaConfig(aMin: Double, aMax: Double, bMin: Double, bMax: Double,
                        seq: String, width: Int, height: Int, N: Int) {
     def toLyaConfig1(fast: Boolean): LyaConfig1 =
@@ -406,7 +439,15 @@ object Lyapunov {
         seq = stringToSeq(seq), width = if (fast) 320 else width, height = if (fast) 320 else height, N = N)
   }
 
+  object ColorConfig {
+    implicit val format = AutoFormat[ColorConfig]
+  }
   case class ColorConfig(min: Double, max: Double, invert: Boolean, noise: Double, thresh: Double)
+
+  object Situation {
+    implicit val format = AutoFormat[Situation]
+  }
+  case class Situation(lya: LyaConfig, color: ColorConfig)
 
   case class LyaConfig1(aMin: Double, aMax: Double, bMin: Double, bMax: Double,
                         seq: Vector[Double], width: Int, height: Int, N: Int)
@@ -422,7 +463,7 @@ object Lyapunov {
     val width     = data(0).length
     val img       = new BufferedImage(width, height, if (thresh > 0) BufferedImage.TYPE_BYTE_BINARY else BufferedImage.TYPE_INT_ARGB)
     val g         = img.createGraphics()
-    val noiseAmt  = if (noise <= 0) 0.0 else (noise - 50) * 0.01
+    val noiseAmt  = if (noise <= 0) 0.0 else noise * 0.01
     var yi = 0
     while (yi < height) {
       var xi = 0
@@ -431,7 +472,7 @@ object Lyapunov {
         val lambda0 = data(yi)(xi)
         val lambda1 = lambda0.linlin(min, max, 0, 1).clip(0, 1)
         val lambda2 = if (invert) 1 - lambda1 else lambda1
-        val lambda3 = if (noiseAmt != 0) math.random * noiseAmt + lambda2 else lambda2
+        val lambda3 = if (noiseAmt != 0) (math.random * 2 - 1) * noiseAmt + lambda2 else lambda2
         val lambda  = if (thresh > 0) { if (lambda3 > thresh * 0.01) 1.0 else 0.0 } else lambda3
         val rgb = IntensityPalette.apply(lambda.toFloat)
         g.setColor(new Color(rgb))
