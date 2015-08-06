@@ -32,11 +32,13 @@ lazy val lyapunov = Project(id = s"$baseNameL-lyapunov", base = file("lyapunov")
   .settings(commonSettings)
   .settings(
     libraryDependencies ++= Seq(
-      "de.sciss" %% "numbers"           % "0.1.1",
-      "de.sciss" %  "intensitypalette"  % "1.0.0",
-      "de.sciss" %% "processor"         % "0.4.0",
-      "de.sciss" %% "fileutil"          % "1.1.1",
-      "de.sciss" %% "scissdsp"          % "1.2.2"
+      "de.sciss" %% "numbers"            % "0.1.1",
+      "de.sciss" %  "intensitypalette"   % "1.0.0",
+      "de.sciss" %% "processor"          % "0.4.0",
+      "de.sciss" %% "fileutil"           % "1.1.1",
+      "de.sciss" %% "scissdsp"           % "1.2.2",
+      "de.sciss" %% "audiowidgets-swing" % "1.9.1",
+      "de.sciss" %% "guiflitz"           % "0.5.0"
     )
   )
 
