@@ -5,5 +5,5 @@
 
 ## statement
 
-'Miniaturen 15' is a series of music pieces. It is (C)opyright 2015 by Hanns Holger Rutz. All rights reserved. The software/pieces are released under the [Creative Commons Attribution-NonCommercial-NoDerivs 3.0 Unported License (CC BY-NC-ND-3.0)](https://raw.github.com/Sciss/Miniaturen15/master/LICENSE) and come with absolutely no warranties. To contact the author, send an email to `contact at sciss.de`
+'Miniaturen 15' is a series of music pieces. It is (C)opyright 2015 by Hanns Holger Rutz. All rights reserved. The software/pieces are released under the [Creative Commons Attribution-NonCommercial-NoDerivatives 4.0 International License (CC BY-NC-ND-4.0)](https://raw.github.com/Sciss/Miniaturen15/master/LICENSE) and come with absolutely no warranties. To contact the author, send an email to `contact at sciss.de`
 

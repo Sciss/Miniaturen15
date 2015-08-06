@@ -30,4 +30,13 @@ lazy val common = Project(id = s"$baseNameL-common", base = file("common"))
 lazy val lyapunov = Project(id = s"$baseNameL-lyapunov", base = file("lyapunov"))
   .dependsOn(common)
   .settings(commonSettings)
+  .settings(
+    libraryDependencies ++= Seq(
+      "de.sciss" %% "numbers"           % "0.1.1",
+      "de.sciss" %  "intensitypalette"  % "1.0.0",
+      "de.sciss" %% "processor"         % "0.4.0",
+      "de.sciss" %% "fileutil"          % "1.1.1",
+      "de.sciss" %% "scissdsp"          % "1.2.2"
+    )
+  )
 
