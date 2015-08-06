@@ -88,8 +88,8 @@ object Lyapunov {
     val avCfg   = AutoView.Config()
     avCfg.small = true
 
-    val lyaCfg0 = LyaConfig(aMin = 3.78 * 100, aMax = 3.82 * 100, bMin = 3.78 * 100, bMax = 3.82 * 100,
-      seq = "AABBAAB", width = iw, height = ih, N = 4096)
+    val lyaCfg0 = LyaConfig(aMin = 0 * 1000, aMax = 4 * 1000, bMin = 0 * 1000, bMax = 4 * 1000,
+      seq = "AABBAAB", width = iw, height = ih, N = 1000)
     val colrCfg0 = ColorConfig(min = -0.5, max = 0.45, invert = true)
 
     val lyaCfgView  = AutoView(lyaCfg0 , avCfg)
@@ -142,6 +142,13 @@ object Lyapunov {
       private var mPress: MouseEvent = _
       private var mDrag : MouseEvent = _
 
+      private def setCell(v1: Point2D, v2: Point2D): Unit = {
+        val c   = lyaCfgView.cell
+        val c0  = c()
+        val c1  = c0.copy(aMin = v1.getX, aMax = v2.getX, bMin = v1.getY, bMax = v2.getY)
+        c()     = c1
+      }
+
       reactions += {
         case m: MouseEntered =>
           crossHair = true
@@ -168,15 +175,22 @@ object Lyapunov {
         case m: MousePressed =>
           mPress = m
           isPressed = true
+          if (m.peer.getButton == 3) {
+            val hSpan = hAxis1.maximum - hAxis1.minimum
+            val vSpan = vAxis1.maximum - vAxis1.minimum
+            val vc = mouseToVirtual(mPress.point)
+            import numbers.Implicits._
+            val v1 = new Point2D.Double((vc.getX - hSpan).clip(0, 4000), (vc.getY - vSpan).clip(0, 4000))
+            val v2 = new Point2D.Double((vc.getX + hSpan).clip(0, 4000), (vc.getY + vSpan).clip(0, 4000))
+            setCell(v1, v2)
+          }
+
         case m: MouseReleased =>
           if (isPressed) {
             if (isDragging) {
               val v1  = mouseToVirtual(mPress.point)
               val v2  = mouseToVirtual(mDrag .point)
-              val c   = lyaCfgView.cell
-              val c0  = c()
-              val c1  = c0.copy(aMin = v1.getX, aMax = v2.getX, bMin = v1.getY, bMax = v2.getY)
-              c()     = c1
+              setCell(v1, v2)
               isDragging = false
               repaint()
             }
@@ -313,6 +327,8 @@ object Lyapunov {
       open()
     }
     f.defaultCloseOperation = CloseOperation.Exit
+
+    ggRender.doClick()
   }
 
   def stringToSeq(s: String): Vector[Double] = s.map(c => if (c == 'A') 0.0 else 1.0)(breakOut)
@@ -320,7 +336,7 @@ object Lyapunov {
   case class LyaConfig(aMin: Double, aMax: Double, bMin: Double, bMax: Double,
                        seq: String, width: Int, height: Int, N: Int) {
     def toLyaConfig1(fast: Boolean): LyaConfig1 =
-      LyaConfig1(aMin = aMin * 0.01, aMax = aMax * 0.01, bMin = bMin * 0.01, bMax = bMax * 0.01,
+      LyaConfig1(aMin = aMin * 0.001, aMax = aMax * 0.001, bMin = bMin * 0.001, bMax = bMax * 0.001,
         seq = stringToSeq(seq), width = if (fast) 320 else width, height = if (fast) 320 else height, N = N)
   }
 
