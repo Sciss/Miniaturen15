@@ -31,11 +31,12 @@ import de.sciss.model.Model
 import de.sciss.numbers
 import de.sciss.play.json.AutoFormat
 import de.sciss.processor.Processor
+import de.sciss.processor.impl.ProcessorImpl
 import de.sciss.swingplus.CloseOperation
 import de.sciss.swingplus.Implicits._
 
 import scala.collection.breakOut
-import scala.concurrent.ExecutionContext
+import scala.concurrent.{Future, ExecutionContext}
 import scala.swing.Swing._
 import scala.swing.event.{MouseDragged, MouseReleased, MousePressed, MouseEvent, MouseMoved, MouseExited, MouseEntered, ButtonClicked}
 import scala.swing.{ProgressBar, Action, MenuItem, Menu, MenuBar, FlowPanel, Point, BorderPanel, BoxPanel, Button, Component, Frame, Graphics2D, Orientation}
@@ -43,6 +44,8 @@ import scala.util.control.NonFatal
 import scala.util.{Failure, Success}
 
 object Lyapunov {
+  import ExecutionContext.Implicits.global
+
   def main(args: Array[String]): Unit = {
     onEDT {
       try {
@@ -79,6 +82,125 @@ object Lyapunov {
 //      case _ => t.synchronized(t.notify())
 //    }
 //  }
+
+  case class MovieConfig(duration: Double = 60.0, fps: Int = 25)
+
+  def renderImage(lya: LyaConfig1, colr: ColorConfig, f: File): (Processor[Any], Future[Any]) = {
+    val pFull  = Processor[Result]("calc") { self =>
+      calc(self, lya)
+    }
+    val futOut = pFull.map { res =>
+      val img = mkImage(res, colr)
+      ImageIO.write(img, "png", f.replaceExt("png"))
+    }
+    (pFull, futOut)
+  }
+
+  def renderImageSequence(sitA: Situation, sitB: Situation, numFrames: Int, f: File): Processor[Unit] = {
+    val res = new RenderImageSequence(sitA = sitA, sitB = sitB, numFrames = numFrames, f = f)
+    res.start()
+    res
+  }
+
+  private final class RenderImageSequence(sitA: Situation, sitB: Situation, numFrames: Int, f: File)
+    extends ProcessorImpl[Unit, RenderImageSequence] with Processor[Unit] {
+
+    private val seqLen = lcm(sitA.lya.seq.length, sitB.lya.seq.length)
+    private val seqA   = {
+      val xs = stringToSeq(sitA.lya.seq)
+      Vector.tabulate(seqLen)(i => xs(i % xs.length))
+    }
+    private val seqB    = {
+      val xs = stringToSeq(sitB.lya.seq)
+      Vector.tabulate(seqLen)(i => xs(i % xs.length))
+    }
+    private val seqAB = seqA zip seqB
+
+    private def mixLya(w2: Double): LyaConfig1 = {
+      val w1      = 1 - w2
+      val l1      = sitA.lya
+      val l2      = sitB.lya
+      val aMin    = l1.aMin   * w1 + l2.aMin   * w2
+      val aMax    = l1.aMax   * w1 + l2.aMax   * w2
+      val bMin    = l1.bMin   * w1 + l2.bMin   * w2
+      val bMax    = l1.bMax   * w1 + l2.bMax   * w2
+      val width   = l1.width  * w1 + l2.width  * w2
+      val height  = l1.height * w1 + l2.height * w2
+      val N       = l1.N      * w1 + l2.N      * w2
+
+      val seq     = seqAB.map { case (x1, x2) =>
+          x1 * w1 + x2 * w2
+      }
+
+      // beware that LyaConfig1 has different scaling
+      val res0 = LyaConfig(aMin = aMin, aMax = aMax, bMin = bMin, bMax = bMax,
+        seq = l1.seq, width = (width + 0.5).toInt, height = (height + 0.5).toInt, N = (N + 0.5).toInt)
+      val res1 = res0.toLyaConfig1(fast = false)
+      val res2 = res1.copy(seq = seq)
+      res2
+    }
+
+    private def mixColor(w2: Double): ColorConfig = {
+      val w1      = 1 - w2
+      val c1      = sitA.color
+      val c2      = sitB.color
+      val min     = c1.min    * w1 + c2.min    * w2
+      val max     = c1.max    * w1 + c2.max    * w2
+      val noise   = c1.noise  * w1 + c2.noise  * w2
+      val thresh  = c1.thresh * w1 + c2.thresh * w2
+      val invert  = if (w2 < 0.5) c1.invert else c2.invert
+      ColorConfig(min = min, max = max, invert = invert, noise = noise, thresh = thresh)
+    }
+
+    protected def body(): Unit = {
+      val json = Situation.format2.writes((sitA, sitB)).toString()
+      val jsonOut = new FileOutputStream(f.replaceExt("json"))
+      jsonOut.write(json.getBytes("UTF-8"))
+      jsonOut.close()
+
+      val dir     = f.parent
+      val name    = f.base
+      val fWeight = 1.0 / numFrames
+      for (frame <- 1 to numFrames) {
+        import numbers.Implicits._
+        val w       = frame.linlin(1, numFrames, 0, 1)
+        val lya     = mixLya(w)
+        val colr    = mixColor(w)
+
+//        println(lya )
+//        println(colr)
+
+        val fFrame  = dir / s"$name-$frame.png"
+        val (pFrame, _) = renderImage(lya, colr, fFrame)
+        await(pFrame, progress, fWeight)
+        // progress = w
+        checkAborted()
+      }
+    }
+  }
+
+  def mkProgressDialog(title: String, p: Processor[Any], tail: Future[Any]): Unit = {
+    val ggProg  = new ProgressBar
+    val ggAbort = new Button("Abort")
+    val opt     = OptionPane(message = ggProg, messageType = OptionPane.Message.Plain, entries = Seq(ggAbort))
+
+    val optPeer = opt.peer
+    val dlg = optPeer.createDialog(title)
+    ggAbort.listenTo(ggAbort)
+    ggAbort.reactions += {
+      case ButtonClicked(_) =>
+        p.abort()
+    }
+    tail.onComplete(_ => onEDT(dlg.dispose()))
+    tail.onFailure {
+      case Processor.Aborted() =>
+      case ex => ex.printStackTrace()
+    }
+    p.addListener {
+      case prog @ Processor.Progress(_, _) => onEDT(ggProg.value = prog.toInt)
+    }
+    dlg.setVisible(true)
+  }
 
   def mkFrame(): Unit = {
     val hAxis1  = new Axis(Orientation.Horizontal)
@@ -125,7 +247,7 @@ object Lyapunov {
     ggRender.maximumSize  = ggRender.preferredSize
 
     val ggNormalize = Button("Normalize") {
-      val stats = statsView.cell()
+      val stats = statsView.value
       val c     = colrCfgView.cell
       val c0    = c()
       val c1    = c0.copy(min = if (stats.min.isInfinity) stats.max - 10 else stats.min, max = stats.max)
@@ -133,7 +255,7 @@ object Lyapunov {
     }
 
     def mkSituation(): Situation =
-      Situation(lyaCfgView.cell(), colrCfgView.cell())
+      Situation(lyaCfgView.value, colrCfgView.value)
 
     class SituationView(name: String) {
       var situation = mkSituation()
@@ -276,7 +398,7 @@ object Lyapunov {
     def updateColors1(lyaCfg: LyaConfig, data: Result): Unit = {
       val g       = img.createGraphics()
       g.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BILINEAR)
-      val colrCfg = colrCfgView.cell()
+      val colrCfg = colrCfgView.value
       val img1    = mkImage(data, cfg = colrCfg)
       val scale   = AffineTransform.getScaleInstance(iw.toDouble / 320 /* lyaCfg.width */, ih.toDouble / 320 /* lyaCfg.height */)
       g.drawImage(img1, scale, null)
@@ -295,6 +417,7 @@ object Lyapunov {
                 statsView.cell() = data.stats
                 updateColors1(lyaCfg, data)
                 updateAxes(lyaCfg)
+              case Failure(Processor.Aborted()) =>
               case Failure(ex) =>
                 ex.printStackTrace()
             }
@@ -312,9 +435,8 @@ object Lyapunov {
     }
 
     def startRendering(): Unit = {
-      import ExecutionContext.Implicits.global
       stopRendering()
-      val lyaCfg = lyaCfgView.cell()
+      val lyaCfg = lyaCfgView.value
       val p = Processor[Result]("calc") { self =>
         calc(self, lyaCfg.toLyaConfig1(fast = true))
       }
@@ -367,39 +489,35 @@ object Lyapunov {
         contents += new MenuItem(new Action("Export Image...") {
           accelerator = Some(KeyStroke.getKeyStroke("ctrl S"))
           def apply(): Unit = {
-            FileDialog.save().show(None).foreach { f =>
-              val ggProg  = new ProgressBar
-              val ggAbort = new Button("Abort")
-              val opt     = OptionPane(message = ggProg, messageType = OptionPane.Message.Plain, entries = Seq(ggAbort))
-              val sit     = mkSituation()
-
-              import ExecutionContext.Implicits.global
-              val pFull  = Processor[Result]("calc") { self =>
-                calc(self, sit.lya.toLyaConfig1(fast = false))
-              }
-              val futOut = pFull.map { res =>
-                val img = mkImage(res, sit.color)
-                ImageIO.write(img, "png", f.replaceExt("png"))
+            val sit = mkSituation()
+            FileDialog.save(init = Some(userHome / s"lya_${sit.hashCode.toHexString}.png")).show(None).foreach { f =>
+              val (pFull, futOut) = renderImage(sit.lya.toLyaConfig1(fast = false), sit.color, f.replaceExt("png"))
+              val futTail = futOut.map { _ =>
                 val json = Situation.format.writes(sit).toString()
                 val jsonOut = new FileOutputStream(f.replaceExt("json"))
                 jsonOut.write(json.getBytes("UTF-8"))
                 jsonOut.close()
               }
-              val optPeer = opt.peer
-              val dlg = optPeer.createDialog("Exporting...")
-              ggAbort.listenTo(ggAbort)
-              ggAbort.reactions += {
-                case ButtonClicked(_) =>
-                  pFull.abort()
+              mkProgressDialog("Exporting...", pFull, futTail)
+            }
+          }
+        })
+
+        contents += new MenuItem(new Action("Export Image Sequence...") {
+          accelerator = Some(KeyStroke.getKeyStroke("ctrl shift S"))
+
+          def apply(): Unit = {
+            val initName = (sitA.situation, sitB.situation).hashCode.toHexString
+            FileDialog.save(init = Some(userHome / s"lya_$initName.png")).show(None).foreach { f =>
+              val pMovie    = AutoView(MovieConfig())
+              val optMovie  = OptionPane.confirmation(message = pMovie.component,
+                optionType = OptionPane.Options.OkCancel)
+              if (optMovie.show(title = "Image Sequence Settings") == OptionPane.Result.Ok) {
+                val MovieConfig(duration, fps) = pMovie.value
+                val numFrames = (duration * fps + 0.5).toInt
+                val pFull = renderImageSequence(sitA.situation, sitB.situation, numFrames, f)
+                mkProgressDialog("Exporting...", pFull, pFull)
               }
-              futOut.onComplete(_ => onEDT(dlg.dispose()))
-              futOut.onFailure {
-                case ex => ex.printStackTrace()
-              }
-              pFull.addListener {
-                case prog @ Processor.Progress(_, _) => onEDT(ggProg.value = prog.toInt)
-              }
-              dlg.setVisible(true)
             }
           }
         })
@@ -446,6 +564,7 @@ object Lyapunov {
 
   object Situation {
     implicit val format = AutoFormat[Situation]
+    val format2 = AutoFormat[(Situation, Situation)]
   }
   case class Situation(lya: LyaConfig, color: ColorConfig)
 
