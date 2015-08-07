@@ -17,7 +17,7 @@ package de.sciss.min15
 import java.awt.{RenderingHints, Cursor, Color}
 import java.awt.geom.{Point2D, AffineTransform}
 import java.awt.image.BufferedImage
-import java.io.FileOutputStream
+import java.io.{FileInputStream, FileOutputStream}
 import javax.imageio.ImageIO
 import javax.swing.{KeyStroke, UIManager}
 
@@ -34,9 +34,10 @@ import de.sciss.processor.Processor
 import de.sciss.processor.impl.ProcessorImpl
 import de.sciss.swingplus.CloseOperation
 import de.sciss.swingplus.Implicits._
+import play.api.libs.json.{Format, JsObject, JsArray, Json}
 
 import scala.collection.breakOut
-import scala.concurrent.{Future, ExecutionContext}
+import scala.concurrent.{blocking, Future, ExecutionContext}
 import scala.swing.Swing._
 import scala.swing.event.{MouseDragged, MouseReleased, MousePressed, MouseEvent, MouseMoved, MouseExited, MouseEntered, ButtonClicked}
 import scala.swing.{ProgressBar, Action, MenuItem, Menu, MenuBar, FlowPanel, Point, BorderPanel, BoxPanel, Button, Component, Frame, Graphics2D, Orientation}
@@ -57,43 +58,25 @@ object Lyapunov {
     }
   }
 
-//  def test(): Unit = {
-//    import ExecutionContext.Implicits.global
-//    val s = Settings(aMin = 3.78, aMax = 3.82, bMin = 3.78, bMax = 3.82,
-//                     seq = Vector[Double](0,0,1,1.0,0.0,1) /* stringToSeq("AABAB") */,
-//                     width = 4096, height = 4096, N = 4096,
-//                     colrMin = -0.5, colrMax = 0.45, invert = true)
-//    val imgFut   = Processor[BufferedImage]("lya")(calc(_, s))
-//    val writeFut = imgFut.map { img =>
-//      ImageIO.write(img, "png", userHome / "Documents" / "temp" / "test.png")
-//    }
-//    import processor.ProcessorOps
-//    println("_" * 33)
-//    imgFut.monitor(printResult = false)
-//    writeFut.onComplete {
-//      case Success(_) => println("Done.")
-//      case Failure(ex) => ex.printStackTrace()
-//    }
-//    val t = new Thread {
-//      override def run(): Unit = this.synchronized(this.wait())
-//      start()
-//    }
-//    writeFut.onComplete {
-//      case _ => t.synchronized(t.notify())
-//    }
-//  }
-
   case class MovieConfig(duration: Double = 60.0, fps: Int = 25)
 
-  def renderImage(lya: LyaConfig1, colr: ColorConfig, f: File): (Processor[Any], Future[Any]) = {
-    val pFull  = Processor[Result]("calc") { self =>
-      calc(self, lya)
+  def renderImage(lya: LyaConfig1, colr: ColorConfig, f: File): Processor[Unit] = {
+    val res = new RenderImage(lya, colr, f)
+    res.start()
+    res
+  }
+
+  private final class RenderImage(lya: LyaConfig1, colr: ColorConfig, f: File)
+    extends ProcessorImpl[Unit, Processor[Unit]] with Processor[Unit] {
+
+    protected def body(): Unit = blocking {
+      val fOut  = f.replaceExt("png")
+      if (!fOut.exists()) {
+        val res = calc(this, lya)
+        val img = mkImage(res, colr)
+        ImageIO.write(img, "png", fOut)
+      }
     }
-    val futOut = pFull.map { res =>
-      val img = mkImage(res, colr)
-      ImageIO.write(img, "png", f.replaceExt("png"))
-    }
-    (pFull, futOut)
   }
 
   def renderImageSequence(sitA: Situation, sitB: Situation, numFrames: Int, f: File): Processor[Unit] = {
@@ -153,27 +136,37 @@ object Lyapunov {
     }
 
     protected def body(): Unit = {
-      val json = Situation.format2.writes((sitA, sitB)).toString()
-      val jsonOut = new FileOutputStream(f.replaceExt("json"))
-      jsonOut.write(json.getBytes("UTF-8"))
-      jsonOut.close()
+      val jsonF = f.replaceExt("json")
+      if (!jsonF.exists()) blocking {
+        val json    = Situation.format2.writes((sitA, sitB)).toString()
+        val jsonOut = new FileOutputStream(jsonF)
+        jsonOut.write(json.getBytes("UTF-8"))
+        jsonOut.close()
+      }
 
-      val dir     = f.parent
-      val name    = f.base
-      val fWeight = 1.0 / numFrames
-      for (frame <- 1 to numFrames) {
+      val dir       = f.parent
+      val name      = f.base
+      val clumpSz   = Runtime.getRuntime.availableProcessors()
+      val clump     = (1 to numFrames).grouped(clumpSz).toVector
+      val numClumps = clump.size
+
+      val fWeight   = 1.0 / numClumps
+
+      clump.zipWithIndex.foreach { case (group, groupIdx) =>
         import numbers.Implicits._
-        val w       = frame.linlin(1, numFrames, 0, 1)
-        val lya     = mixLya(w)
-        val colr    = mixColor(w)
-
-//        println(lya )
-//        println(colr)
-
-        val fFrame  = dir / s"$name-$frame.png"
-        val (pFrame, _) = renderImage(lya, colr, fFrame)
-        await(pFrame, progress, fWeight)
-        // progress = w
+        val pGroup: Vec[Processor[Any]] = group.map { frame =>
+          val w       = frame.linlin(1, numFrames, 0, 1)
+          val lya     = mixLya(w)
+          val colr    = mixColor(w)
+          val fFrame  = dir / s"$name-$frame.png"
+          renderImage(lya, colr, fFrame)
+        }
+        // val futGroup = Future.sequence(pGroup)
+        // XXX TODO --- we need Processor.sequence
+        pGroup.zipWithIndex.foreach { case (p, i) =>
+          await(p, progress, fWeight)
+        }
+        progress = (groupIdx + 1).toDouble / numClumps
         checkAborted()
       }
     }
@@ -486,17 +479,49 @@ object Lyapunov {
 
     val mb = new MenuBar {
       contents += new Menu("File") {
+        contents += new MenuItem(new Action("Load Settings...") {
+          accelerator = Some(KeyStroke.getKeyStroke("ctrl O"))
+          def apply(): Unit = {
+            val dlg = FileDialog.open()
+            dlg.setFilter(_.ext.toLowerCase == "json")
+            dlg.show(None).foreach { f =>
+              val fin = new FileInputStream(f)
+              val arr = new Array[Byte](fin.available())
+              fin.read(arr)
+              fin.close()
+              val jsn = Json.parse(new String(arr, "UTF-8"))
+              jsn match {
+                case _: JsArray => // video setting tuple
+                  import Situation.format2
+                  val (sitAv, sitBv) = Json.fromJson[(Situation, Situation)](jsn).get
+                  sitA.situation = sitAv
+                  sitB.situation = sitBv
+
+                case _: JsObject => // individual setting
+                  val res = Json.fromJson[Situation](jsn).get
+                  lyaCfgView .cell() = res.lya
+                  colrCfgView.cell() = res.color
+
+                case _ =>
+                  sys.error(s"Not an array or object: $jsn")
+              }
+            }
+          }
+        })
+
         contents += new MenuItem(new Action("Export Image...") {
           accelerator = Some(KeyStroke.getKeyStroke("ctrl S"))
           def apply(): Unit = {
             val sit = mkSituation()
             FileDialog.save(init = Some(userHome / s"lya_${sit.hashCode.toHexString}.png")).show(None).foreach { f =>
-              val (pFull, futOut) = renderImage(sit.lya.toLyaConfig1(fast = false), sit.color, f.replaceExt("png"))
-              val futTail = futOut.map { _ =>
+              val pFull = renderImage(sit.lya.toLyaConfig1(fast = false), sit.color, f.replaceExt("png"))
+              val futTail = pFull.map { _ =>
                 val json = Situation.format.writes(sit).toString()
-                val jsonOut = new FileOutputStream(f.replaceExt("json"))
-                jsonOut.write(json.getBytes("UTF-8"))
-                jsonOut.close()
+                blocking {
+                  val jsonOut = new FileOutputStream(f.replaceExt("json"))
+                  jsonOut.write(json.getBytes("UTF-8"))
+                  jsonOut.close()
+                }
               }
               mkProgressDialog("Exporting...", pFull, futTail)
             }
@@ -563,8 +588,8 @@ object Lyapunov {
   case class ColorConfig(min: Double, max: Double, invert: Boolean, noise: Double, thresh: Double)
 
   object Situation {
-    implicit val format = AutoFormat[Situation]
-    val format2 = AutoFormat[(Situation, Situation)]
+    implicit val format : Format[Situation]               = AutoFormat[Situation]
+    implicit val format2: Format[(Situation, Situation)]  = AutoFormat[(Situation, Situation)]
   }
   case class Situation(lya: LyaConfig, color: ColorConfig)
 
@@ -604,8 +629,10 @@ object Lyapunov {
     img
   }
 
+  private final val log = FastLog(base = math.E, q = 8)
+
   // https://en.wikipedia.org/wiki/Lyapunov_fractal
-  def calc(self: Processor[Result] with Processor.Body, settings: LyaConfig1): Result = {
+  def calc(self: Processor[Any] with Processor.Body, settings: LyaConfig1): Result = {
     import settings._
     // val img     = new BufferedImage(width, height, BufferedImage.TYPE_INT_ARGB)
     // val g       = img.createGraphics()
@@ -615,7 +642,6 @@ object Lyapunov {
     var lMin    = Double.PositiveInfinity
     var lMax    = Double.NegativeInfinity
     val seqA    = seq.toArray
-    val log     = FastLog(base = math.E, q = 8)
     var yi = 0
     while (yi < height) {
       var xi = 0
