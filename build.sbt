@@ -31,6 +31,7 @@ lazy val lyapunov = Project(id = s"$baseNameL-lyapunov", base = file("lyapunov")
   .dependsOn(common)
   .settings(commonSettings)
   .settings(
+    resolvers += Resolver.typesafeRepo("releases"),
     libraryDependencies ++= Seq(
       "de.sciss" %% "numbers"            % "0.1.1",
       "de.sciss" %  "intensitypalette"   % "1.0.0",
