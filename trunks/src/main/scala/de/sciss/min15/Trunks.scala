@@ -105,7 +105,7 @@ object Trunks {
 
     val cfg0 = Config(centerX = 2120, centerY = 2680, angleStart = 0.0, angleSpan = 360.0,
                       flipX = true, flipY = false,
-                      width = 2160, height = 2160 /* , virtualWidth = 2160 */ /* * 8 */, noise = 10, thresh = 180,
+                      width = 2160, height = 2160 /* , virtualWidth = 2160 */ /* * 8 */, noise = 20, thresh = 210,
                       invert = true)
 
     val srcCfgView  = AutoView(Source(id = 11))
@@ -503,9 +503,9 @@ object Trunks {
       }
       progress = 0.25
       checkAborted()
-      val angleStart  = config.angleStart
+      val angleStart  =  config.angleStart
       val angleSpan   = config.angleSpan // * config.width / config.virtualWidth
-      println(f"cx = $cx%1.2f, cy = $cy%1.2f, angleStart = $angleStart%1.1f, angleSpan = $angleSpan%1.1f")
+      // println(f"cx = $cx%1.2f, cy = $cy%1.2f, angleStart = $angleStart%1.1f, angleSpan = $angleSpan%1.1f")
       val polarOp     = new MyPolar(angleStart = angleStart, angleSpan = angleSpan, cx = cx, cy = cy,
         flipX = config.flipX, flipY = config.flipY)
       // val polarOp     = new PolarFilter
@@ -550,8 +550,13 @@ object Trunks {
 
       val Pi2 = math.Pi * 2
 
-      val t     = (if (flipX) inWidth - x - 1 else x).toDouble / inWidth
-      val theta = ((t.linlin(0, 1, angleStart, angleStart + angleSpan) * math.Pi / 180) + Pi2) % Pi2
+//      val ang1  = if (flipX) angleStart + angleSpan else angleStart
+//      val ang2  = if (flipX) angleStart else angleStart + angleSpan
+//      val t     = (if (flipX) inWidth - x - 1 else x).toDouble / inWidth
+//      val theta = ((t.linlin(0, 1, ang1, ang2) * math.Pi / 180) + Pi2) % Pi2
+      val t     = x.toDouble / inWidth
+      val theta0 = ((t.linlin(0, 1, angleStart, angleStart + angleSpan) * math.Pi / 180) + Pi2) % Pi2
+      val theta = if (flipX) -theta0 else theta0
       val cos   = math.cos(theta)
       val sin   = math.sin(theta)
       val rx    = if (cos >= 0) 1.0 - cx else cx
