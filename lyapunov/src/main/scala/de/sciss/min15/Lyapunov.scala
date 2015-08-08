@@ -19,7 +19,7 @@ import java.awt.image.BufferedImage
 import java.awt.{Color, Cursor, RenderingHints}
 import java.io.{FileInputStream, FileOutputStream}
 import javax.imageio.ImageIO
-import javax.swing.{KeyStroke, UIManager}
+import javax.swing.KeyStroke
 
 import de.sciss.audiowidgets.Axis
 import de.sciss.desktop.{FileDialog, OptionPane}
@@ -37,11 +37,10 @@ import de.sciss.swingplus.Implicits._
 import play.api.libs.json.{Format, JsArray, JsObject, Json}
 
 import scala.collection.breakOut
-import scala.concurrent.{ExecutionContext, blocking}
+import scala.concurrent.blocking
 import scala.swing.Swing._
 import scala.swing.event.{ButtonClicked, MouseDragged, MouseEntered, MouseEvent, MouseExited, MouseMoved, MousePressed, MouseReleased}
 import scala.swing.{Action, BorderPanel, BoxPanel, Button, Component, FlowPanel, Frame, Graphics2D, Menu, MenuBar, MenuItem, Orientation, Point}
-import scala.util.control.NonFatal
 import scala.util.{Failure, Success}
 
 object Lyapunov {

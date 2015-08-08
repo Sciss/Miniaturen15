@@ -21,10 +21,10 @@ import java.io.{FileOutputStream, FileInputStream, FileNotFoundException}
 import javax.imageio.ImageIO
 import javax.swing.KeyStroke
 
-import com.jhlabs.image.{TransformFilter, NoiseFilter, PolarFilter, ThresholdFilter}
+import com.jhlabs.image.{InvertFilter, TransformFilter, NoiseFilter, PolarFilter, ThresholdFilter}
 import com.mortennobel.imagescaling.ResampleOp
 import de.sciss.audiowidgets.Axis
-import de.sciss.desktop.FileDialog
+import de.sciss.desktop.{OptionPane, FileDialog}
 import de.sciss.file._
 import de.sciss.guiflitz.AutoView
 import de.sciss.numbers
@@ -38,7 +38,7 @@ import play.api.libs.json.{Format, Json}
 import scala.concurrent.blocking
 import scala.swing.Swing._
 import scala.swing.event.{ButtonClicked, MouseDragged, MouseEntered, MouseEvent, MouseExited, MouseMoved, MousePressed, MouseReleased}
-import scala.swing.{Action, BorderPanel, BoxPanel, Component, FlowPanel, Frame, Graphics2D, Menu, MenuBar, MenuItem, Orientation, Point, ToggleButton}
+import scala.swing.{Button, Action, BorderPanel, BoxPanel, Component, FlowPanel, Frame, Graphics2D, Menu, MenuBar, MenuItem, Orientation, Point, ToggleButton}
 
 object Trunks {
   def main(args: Array[String]): Unit = runGUI(mkFrame())
@@ -59,6 +59,8 @@ object Trunks {
     input up by target-height / smallest-radius.
 
    */
+
+  case class MovieConfig(duration: Double = 60.0, fps: Int = 25)
 
   object Situation {
     implicit val format : Format[Situation]               = AutoFormat[Situation]
@@ -126,6 +128,30 @@ object Trunks {
       }
     }
 
+    def mkSituation(): Situation =
+      Situation(srcCfgView.value, trimCfgView.value, cfgView.value)
+
+    class SituationView(name: String) {
+      var situation = mkSituation()
+
+      val ggSave = Button(s"> $name") {
+        situation = mkSituation()
+      }
+      ggSave.tooltip = s"Store Settings $name"
+
+      val ggLoad = Button(s"< $name") {
+        srcCfgView  .cell() = situation.source
+        trimCfgView .cell() = situation.trim
+        cfgView     .cell() = situation.config
+      }
+      ggLoad.tooltip = s"Recall Settings $name"
+
+      val component = new FlowPanel(ggSave, ggLoad)
+    }
+
+    lazy val sitA    = new SituationView("A")
+    lazy val sitB    = new SituationView("B")
+
     lazy val ggPolar: ToggleButton = new ToggleButton("Output") {
       listenTo(this)
       reactions += {
@@ -134,9 +160,6 @@ object Trunks {
           if (selected && !polarValid) runPolar()
       }
     }
-
-    def mkSituation(): Situation =
-      Situation(srcCfgView.value, trimCfgView.value, cfgView.value)
 
     lazy val comp: Component = new Component {
       preferredSize = (iw, ih)
@@ -379,18 +402,18 @@ object Trunks {
           accelerator = Some(KeyStroke.getKeyStroke("ctrl shift S"))
 
           def apply(): Unit = {
-//            val initName = (sitA.situation, sitB.situation).hashCode.toHexString
-//            FileDialog.save(init = Some(userHome / s"lya_$initName.png")).show(None).foreach { f =>
-//              val pMovie    = AutoView(MovieConfig())
-//              val optMovie  = OptionPane.confirmation(message = pMovie.component,
-//                optionType = OptionPane.Options.OkCancel)
-//              if (optMovie.show(title = "Image Sequence Settings") == OptionPane.Result.Ok) {
-//                val MovieConfig(duration, fps) = pMovie.value
-//                val numFrames = (duration * fps + 0.5).toInt
-//                val pFull = renderImageSequence(sitA.situation, sitB.situation, numFrames, f)
-//                mkProgressDialog("Exporting...", pFull, pFull)
-//              }
-//            }
+            val initName = (sitA.situation, sitB.situation).hashCode.toHexString
+            FileDialog.save(init = Some(userHome / s"trunk_$initName.png")).show(None).foreach { f =>
+              val pMovie    = AutoView(MovieConfig())
+              val optMovie  = OptionPane.confirmation(message = pMovie.component,
+                optionType = OptionPane.Options.OkCancel)
+              if (optMovie.show(title = "Image Sequence Settings") == OptionPane.Result.Ok) {
+                val MovieConfig(duration, fps) = pMovie.value
+                val numFrames = (duration * fps + 0.5).toInt
+                val pFull = renderImageSequence(sitA.situation, sitB.situation, numFrames, f)
+                mkProgressDialog("Exporting...", pFull, pFull)
+              }
+            }
           }
         })
       }
@@ -404,7 +427,7 @@ object Trunks {
           contents += srcCfgView .component
           contents += trimCfgView.component
           contents += cfgView    .component
-          contents += new FlowPanel(/* ggRender, */ ggPolar)
+          contents += new FlowPanel(/* ggRender, */ ggPolar, sitA.component, sitB.component)
         }, BorderPanel.Position.East)
       }
       resizable = false
@@ -438,6 +461,85 @@ object Trunks {
     }
   }
 
+  def renderImageSequence(sitA: Situation, sitB: Situation, numFrames: Int, f: File): Processor[Unit] = {
+    val res = new RenderImageSequence(sitA = sitA, sitB = sitB, numFrames = numFrames, f = f)
+    res.start()
+    res
+  }
+
+  private final class RenderImageSequence(sitA: Situation, sitB: Situation, numFrames: Int, f: File)
+    extends ProcessorImpl[Unit, RenderImageSequence] with Processor[Unit] {
+
+    private def mkMix(w2: Double): Situation = {
+      val w1      = 1 - w2
+
+      val srcMix  = if (w2 < 0.5) sitA.source else sitB.source
+
+      val trimA   = sitA.trim
+      val trimB   = sitB.trim
+      val left    = trimA.left    * w1 + trimB.left   * w2
+      val top     = trimA.top     * w1 + trimB.top    * w2
+      val right   = trimA.right   * w1 + trimB.right  * w2
+      val bottom  = trimA.bottom  * w1 + trimB.bottom * w2
+      val trimMix = Trim(left = (left + 0.5).toInt, top = (top + 0.5).toInt,
+        right = (right + 0.5).toInt, bottom = (bottom + 0.5).toInt)
+
+      val c1          = sitA.config
+      val c2          = sitB.config
+      val angleStart  = c1.angleStart * w1 + c2.angleStart  * w2
+      val angleSpan   = c1.angleSpan  * w1 + c2.angleSpan   * w2
+      val centerX     = c1.centerX    * w1 + c2.centerX     * w2
+      val centerY     = c1.centerY    * w1 + c2.centerY     * w2
+      val width       = c1.width      * w1 + c2.width       * w2
+      val height      = c1.height     * w1 + c2.height      * w2
+      val noise       = c1.noise      * w1 + c2.noise       * w2
+      val thresh      = c1.thresh     * w1 + c2.thresh      * w2
+      val invert      = if (w2 < 0.5) c1.invert else c2.invert
+      val flipX       = if (w2 < 0.5) c1.flipX  else c2.flipX
+      val flipY       = if (w2 < 0.5) c1.flipY  else c2.flipY
+      val cfgMix      = Config(centerX = centerX, centerY = centerY, angleStart = angleStart, angleSpan = angleSpan,
+        flipX = flipX, flipY = flipY, width = (width + 0.5).toInt, height = (height + 0.5).toInt,
+        noise = (noise + 0.5).toInt, thresh = (thresh + 0.5).toInt, invert = invert)
+
+      Situation(source = srcMix, trim = trimMix, config = cfgMix)
+    }
+
+    protected def body(): Unit = {
+      val jsonF = f.replaceExt("json")
+      if (!jsonF.exists()) blocking {
+        val json    = Situation.format2.writes((sitA, sitB)).toString()
+        val jsonOut = new FileOutputStream(jsonF)
+        jsonOut.write(json.getBytes("UTF-8"))
+        jsonOut.close()
+      }
+
+      val dir       = f.parent
+      val name      = f.base
+      val clumpSz   = Runtime.getRuntime.availableProcessors()
+      val clump     = (1 to numFrames).grouped(clumpSz).toVector
+      val numClumps = clump.size
+
+      val fWeight   = 1.0 / numClumps
+
+      clump.zipWithIndex.foreach { case (group, groupIdx) =>
+        import numbers.Implicits._
+        val pGroup: Vec[Processor[Any]] = group.map { frame =>
+          val w       = frame.linlin(1, numFrames, 0, 1)
+          val sitMix  = mkMix(w)
+          val fFrame  = dir / s"$name-$frame.png"
+          renderImage(sitMix, fFrame)
+        }
+        // val futGroup = Future.sequence(pGroup)
+        // XXX TODO --- we need Processor.sequence
+        pGroup.zipWithIndex.foreach { case (p, i) =>
+          await(p, progress, fWeight)
+        }
+        progress = (groupIdx + 1).toDouble / numClumps
+        checkAborted()
+      }
+    }
+  }
+
   def mkImageIn(source: Source): Processor[BufferedImage] = {
     val res = new MkImageIn(source)
     startAndReportProcessor(res)
@@ -447,7 +549,7 @@ object Trunks {
     extends ProcessorImpl[BufferedImage, Processor[BufferedImage]] with Processor[BufferedImage] {
 
     def body(): BufferedImage = blocking {
-      val fIn     = file("trunks_vid") / "image_in" / s"trunk${source.id}.png"
+      val fIn     = file("trunks_vid") / "image_in" / s"trunk${source.id}t.png"
       if (!fIn.isFile) throw new FileNotFoundException(fIn.path)
       val imgIn   = ImageIO.read(fIn)
 //      val imgOut  = cropImage(imgIn, trimLeft, trimTop,
@@ -512,22 +614,34 @@ object Trunks {
       polarOp.setType(PolarFilter.POLAR_TO_RECT)
       polarOp.setEdgeAction(TransformFilter.CLAMP)
       val imgPolar    = polarOp.filter(imgScale, null)
-      progress = 0.50
+      progress = 0.75
       checkAborted()
-      val imgNoise = if (config.noise <= 0) imgPolar else {
+      val imgPolarS = if (fast) imgPolar else {
+        val resampleOp = new ResampleOp(config.width, config.height)
+        resampleOp.filter(imgPolar, null)
+      }
+      progress = 0.85
+      checkAborted()
+      val imgNoise = if (config.noise <= 0) imgPolarS else {
         val noiseOp = new NoiseFilter
         noiseOp.setAmount(config.noise)
         noiseOp.setMonochrome(true)
-        noiseOp.filter(imgPolar, null)
+        noiseOp.filter(imgPolarS, null)
       }
-      progress = 0.75
+      progress = 0.90
       checkAborted()
-      val imgOut = if (config.thresh <= 0) imgNoise else {
+      val imgThresh = if (config.thresh <= 0) imgNoise else {
         val threshOp = new ThresholdFilter(config.thresh)
-        threshOp.filter(imgNoise, null)
+        val res = new BufferedImage(imgNoise.getWidth, imgNoise.getHeight, BufferedImage.TYPE_BYTE_INDEXED)
+        threshOp.filter(imgNoise, res)
       }
-      progress = 1.00
+      progress = 0.95
       checkAborted()
+      val imgOut = if (!config.invert) imgThresh else {
+        val invertOp = new InvertFilter
+        invertOp.filter(imgThresh, null)
+      }
+      progress = 1.0
       imgOut
     }
   }
