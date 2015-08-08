@@ -188,13 +188,11 @@ object Trunks {
           mPress = m
           isPressed = true
           if (m.peer.getButton == 3) {
-            val hSpan = hAxis1.maximum - hAxis1.minimum
-            val vSpan = vAxis1.maximum - vAxis1.minimum
-            val vc = mouseToVirtual(mPress.point)
-            import numbers.Implicits._
-            val v1 = new Point2D.Double((vc.getX - hSpan).clip(0, 4000), (vc.getY - vSpan).clip(0, 4000))
-            val v2 = new Point2D.Double((vc.getX + hSpan).clip(0, 4000), (vc.getY + vSpan).clip(0, 4000))
-            setCell(v1, v2)
+            val v1    = mouseToVirtual(mPress.point)
+            val c     = cfgView.cell
+            val c0    = c()
+            val c1    = c0.copy(centerX = (v1.getX + 0.5).toInt, centerY = (v1.getY + 0.5).toInt)
+            c()       = c1
           }
 
         case m: MouseReleased =>
@@ -234,7 +232,7 @@ object Trunks {
     def runPolar(): Unit = {
       procPolar.foreach(_.abort())
       imgTrimOption().foreach { imgTrim =>
-        val proc = mkImagePolar(imgTrim, trimCfgView.value, cfgView.value, fast = false /* true */)
+        val proc = mkImagePolar(imgTrim, trimCfgView.value, cfgView.value, fast = true)
         procPolar = Some(proc)
         proc.foreach { imgPolar =>
           println("Done.")
@@ -516,7 +514,7 @@ object Trunks {
       val cos   = math.cos(theta)
       val sin   = math.sin(theta)
       val rx    = if (cos >= 0) 1.0 - cx else cx
-      val ry    = if (sin  < 0) 1.0 - cy else cy
+      val ry    = if (sin >= 0) 1.0 - cy else cy
       val r     = (if (flipY) inHeight - y - 1 else y).toDouble / inHeight
 
       val px    = (cx + cos * rx * r) * inWidth
