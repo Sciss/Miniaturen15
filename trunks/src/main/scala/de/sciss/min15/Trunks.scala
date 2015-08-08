@@ -21,7 +21,7 @@ import java.io.{FileInputStream, FileNotFoundException}
 import javax.imageio.ImageIO
 import javax.swing.KeyStroke
 
-import com.jhlabs.image.{NoiseFilter, PolarFilter, ThresholdFilter}
+import com.jhlabs.image.{TransformFilter, NoiseFilter, PolarFilter, ThresholdFilter}
 import com.mortennobel.imagescaling.ResampleOp
 import de.sciss.audiowidgets.Axis
 import de.sciss.desktop.FileDialog
@@ -64,6 +64,7 @@ object Trunks {
   case class Trim(left: Int = 0, top: Int = 0, right: Int = 0, bottom: Int = 0)
 
   case class Config(centerX: Int, centerY: Int, angleStart: Double, angleSpan: Double,
+                    flipX: Boolean, flipY: Boolean,
                     width: Int, height: Int, virtualWidth: Int, noise: Int, thresh: Int, invert: Boolean)
 
   def mkFrame(): Unit = {
@@ -87,7 +88,8 @@ object Trunks {
     avCfg.small = true
 
     val cfg0 = Config(centerX = 1400, centerY = 1500, angleStart = 0.0, angleSpan = 360.0,
-                      width = 2160, height = 2160, virtualWidth = 2160 * 8, noise = 0, thresh = 0,
+                      flipX = true, flipY = false,
+                      width = 2160, height = 2160, virtualWidth = 2160 /* * 8 */, noise = 10, thresh = 180,
                       invert = true)
 
     val srcCfgView  = AutoView(Source(id = 11))
@@ -232,9 +234,10 @@ object Trunks {
     def runPolar(): Unit = {
       procPolar.foreach(_.abort())
       imgTrimOption().foreach { imgTrim =>
-        val proc = mkImagePolar(imgTrim, trimCfgView.value, cfgView.value, fast = true)
+        val proc = mkImagePolar(imgTrim, trimCfgView.value, cfgView.value, fast = false /* true */)
         procPolar = Some(proc)
         proc.foreach { imgPolar =>
+          println("Done.")
           onEDT {
             val g   = img2.createGraphics()
             val sx  = img2.getWidth .toDouble / imgPolar.getWidth
@@ -449,37 +452,50 @@ object Trunks {
       val ih          = source.getHeight
       val cx          = cxi.toDouble / iw
       val cy          = cyi.toDouble / ih
-      val rxMin       = math.min(cx, 1.0 - cx) * iw
-      val ryMin       = math.min(cy, 1.0 - cy) * ih
-      val rMin        = math.min(rxMin, ryMin)
-      val scale       = config.height / rMin
-      val scaleW      = (iw * scale + 0.5).toInt
-      val scaleH      = (ih * scale + 0.5).toInt
-      val resampleOp  = new ResampleOp(scaleW, scaleH)
-      val imgScale    = resampleOp.filter(source, null)
+      val imgScale    = if (fast) source else {
+        val rxMin       = math.min(cx, 1.0 - cx) * iw
+        val ryMin       = math.min(cy, 1.0 - cy) * ih
+        val rMin        = math.min(rxMin, ryMin)
+        val scale       = config.height / rMin
+        val scaleW      = (iw * scale + 0.5).toInt
+        val scaleH      = (ih * scale + 0.5).toInt
+        val resampleOp  = new ResampleOp(scaleW, scaleH)
+        resampleOp.filter(source, null)
+      }
       progress = 0.25
       checkAborted()
       val angleStart  = config.angleStart
       val angleSpan   = config.angleSpan * config.width / config.virtualWidth
-      val polarOp     = new MyPolar(angleStart = angleStart, angleSpan = angleSpan, cx = cx, cy = cy)
+      println(f"cx = $cx%1.2f, cy = $cy%1.2f, angleStart = $angleStart%1.1f, angleSpan = $angleSpan%1.1f")
+      val polarOp     = new MyPolar(angleStart = angleStart, angleSpan = angleSpan, cx = cx, cy = cy,
+        flipX = config.flipX, flipY = config.flipY)
+      // val polarOp     = new PolarFilter
+      polarOp.setType(PolarFilter.POLAR_TO_RECT)
+      polarOp.setEdgeAction(TransformFilter.CLAMP)
       val imgPolar    = polarOp.filter(imgScale, null)
       progress = 0.50
       checkAborted()
-      val noiseOp     = new NoiseFilter
-      noiseOp.setAmount(config.noise)
-      noiseOp.setMonochrome(true)
-      val imgNoise    = noiseOp.filter(imgPolar, null)
+      val imgNoise = if (config.noise <= 0) imgPolar else {
+        val noiseOp = new NoiseFilter
+        noiseOp.setAmount(config.noise)
+        noiseOp.setMonochrome(true)
+        noiseOp.filter(imgPolar, null)
+      }
       progress = 0.75
       checkAborted()
-      val threshOp    = new ThresholdFilter(config.thresh)
-      val imgOut      = threshOp.filter(imgNoise, null)
+      val imgOut = if (config.thresh <= 0) imgNoise else {
+        val threshOp = new ThresholdFilter(config.thresh)
+        threshOp.filter(imgNoise, null)
+      }
       progress = 1.00
       checkAborted()
       imgOut
     }
   }
 
-  class MyPolar(angleStart: Double, angleSpan: Double, cx: Double, cy: Double) extends PolarFilter {
+  class MyPolar(angleStart: Double, angleSpan: Double, cx: Double, cy: Double, flipX: Boolean, flipY: Boolean)
+    extends PolarFilter {
+
     private var inWidth   = 0
     private var inHeight  = 0
 
@@ -495,14 +511,16 @@ object Trunks {
 
       val Pi2 = math.Pi * 2
 
-      val theta = ((x.linlin(0, inWidth, angleStart, angleStart + angleSpan) * math.Pi / 180) + Pi2) % Pi2
+      val t     = (if (flipX) inWidth - x - 1 else x).toDouble / inWidth
+      val theta = ((t.linlin(0, 1, angleStart, angleStart + angleSpan) * math.Pi / 180) + Pi2) % Pi2
       val cos   = math.cos(theta)
       val sin   = math.sin(theta)
       val rx    = if (cos >= 0) 1.0 - cx else cx
       val ry    = if (sin  < 0) 1.0 - cy else cy
+      val r     = (if (flipY) inHeight - y - 1 else y).toDouble / inHeight
 
-      val px    = (cx + cos * rx) * inWidth
-      val py    = (cy - sin * ry) * inHeight
+      val px    = (cx + cos * rx * r) * inWidth
+      val py    = (cy - sin * ry * r) * inHeight
 
       out(0)    = px.toFloat
       out(1)    = py.toFloat
