@@ -1,5 +1,6 @@
 package de.sciss
 
+import java.awt.image.BufferedImage
 import javax.swing.UIManager
 
 import de.sciss.desktop.OptionPane
@@ -73,6 +74,9 @@ package object min15 {
   }
 
   //////////
+
+  def cropImage(src: BufferedImage, x: Int, y: Int, width: Int, height: Int): BufferedImage =
+    src.getSubimage(x, y, width, height)
 
   implicit val executionContext: ExecutionContextExecutor = ExecutionContext.Implicits.global
 }

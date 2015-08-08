@@ -79,7 +79,4 @@ object Collateral {
 
     waitForProcessor(p)
   }
-
-  def cropImage(src: BufferedImage, x: Int, y: Int, width: Int, height: Int): BufferedImage =
-    src.getSubimage(x, y, width, height)
 }

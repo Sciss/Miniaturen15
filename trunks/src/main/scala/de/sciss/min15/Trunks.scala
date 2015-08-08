@@ -17,16 +17,18 @@ package de.sciss.min15
 import java.awt.{RenderingHints, Color, Cursor}
 import java.awt.geom.{AffineTransform, Point2D}
 import java.awt.image.BufferedImage
-import java.io.{FileOutputStream, FileInputStream}
+import java.io.{FileNotFoundException, FileOutputStream, FileInputStream}
+import javax.imageio.ImageIO
 import javax.swing.KeyStroke
 
 import de.sciss.audiowidgets.Axis
 import de.sciss.desktop.{OptionPane, FileDialog}
 import de.sciss.file._
-import de.sciss.guiflitz.AutoView
+import de.sciss.guiflitz.{Cell, AutoView}
 import de.sciss.model.Model
 import de.sciss.numbers
 import de.sciss.processor.Processor
+import de.sciss.processor.impl.ProcessorImpl
 import de.sciss.swingplus.CloseOperation
 import de.sciss.swingplus.Implicits._
 import play.api.libs.json.{JsObject, JsArray, Json}
@@ -53,8 +55,11 @@ object Trunks {
 
    */
 
-  case class Config(source: Int, trimLeft: Int, trimTop: Int, trimBottom: Int, trimRight: Int,
-                    centerX: Int, centerY: Int, angleStart: Double, angleStop: Double,
+  case class Source(id: Int)
+
+  case class Trim(left: Int = 0, top: Int = 0, right: Int = 0, bottom: Int = 0)
+
+  case class Config(centerX: Int, centerY: Int, angleStart: Double, angleStop: Double,
                     width: Int, height: Int, virtualWidth: Int, noise: Int, thresh: Int, invert: Boolean)
 
   def mkFrame(): Unit = {
@@ -65,32 +70,25 @@ object Trunks {
 
     val iw      = 640
     val ih      = 640
-    val img     = new BufferedImage(iw, ih, BufferedImage.TYPE_INT_ARGB)
+    val img1    = new BufferedImage(iw, ih, BufferedImage.TYPE_INT_ARGB)
+
+    var procSource  = Option.empty[Processor[BufferedImage]]
+    var procTrim    = Option.empty[Processor[BufferedImage]]
+    var proc        = Option.empty[(Config, Processor[Any])]
 
     val avCfg   = AutoView.Config()
     avCfg.small = true
 
-    val cfg0 = Config(source = 11, trimLeft = 0, trimTop = 0, trimRight = 0, trimBottom =0,
-                      centerX = 1400, centerY = 1500, angleStart = 0.0, angleStop = 360.0,
+    val cfg0 = Config(centerX = 1400, centerY = 1500, angleStart = 0.0, angleStop = 360.0,
                       width = 2160, height = 2160, virtualWidth = 2160 * 8, noise = 0, thresh = 0,
                       invert = true)
 
-    val cfgView  = AutoView(cfg0, avCfg)
-
-    def updateAxes(cfg: Config): Unit = {
-      hAxis1.minimum  = cfg.trimLeft
-      hAxis1.maximum  = cfg.trimRight
-      vAxis1.minimum  = cfg.trimTop
-      vAxis1.maximum  = cfg.trimBottom
-      hAxis2.minimum  = hAxis1.minimum
-      hAxis2.maximum  = hAxis1.maximum
-      vAxis2.minimum  = vAxis1.minimum
-      vAxis2.maximum  = vAxis1.maximum
-    }
-
-    var proc = Option.empty[(Config, Processor[Any])]
+    val srcCfgView  = AutoView(Source(id = 11))
+    val trimCfgView = AutoView(Trim(left = 300, top = 400, right = 500, bottom = 900))
+    val cfgView     = AutoView(cfg0, avCfg)
 
     val progIcon = new ProgressIcon()
+
     val ggRender = new Button("Render")
     ggRender.preferredSize = {
       val d = ggRender.preferredSize
@@ -100,7 +98,21 @@ object Trunks {
     ggRender.minimumSize  = ggRender.preferredSize
     ggRender.maximumSize  = ggRender.preferredSize
 
-    val comp: Component = new Component {
+    def updateAxes1(): Unit = {
+      imgInOption().foreach { imgIn =>
+        val trim = trimCfgView.value
+        hAxis1.minimum  = trim.left
+        hAxis1.maximum  = imgIn.getWidth - (trim.left + trim.right)
+        vAxis1.minimum  = trim.top
+        vAxis1.maximum  = imgIn.getHeight - (trim.top + trim.bottom)
+        hAxis2.minimum  = hAxis1.minimum
+        hAxis2.maximum  = hAxis1.maximum
+        vAxis2.minimum  = vAxis1.minimum
+        vAxis2.maximum  = vAxis1.maximum
+      }
+    }
+
+    lazy val comp1: Component = new Component {
       preferredSize = (iw, ih)
 
       listenTo(mouse.moves)
@@ -193,7 +205,7 @@ object Trunks {
 
       override protected def paintComponent(g: Graphics2D): Unit = {
         super.paintComponent(g)
-        g.drawImage(img, 0, 0, peer)
+        g.drawImage(img1, 0, 0, peer)
         if (crossHair) {
           g.setXORMode(Color.white)
           g.drawLine(crossHairPt.x, 0, crossHairPt.x, peer.getHeight)
@@ -208,6 +220,43 @@ object Trunks {
       }
     }
 
+    def imgInOption(): Option[BufferedImage] = procSource.flatMap(_.value).flatMap(_.toOption)
+
+    def runTrim(): Unit = {
+      procTrim.foreach(_.abort())
+      imgInOption().foreach { imgIn =>
+        val proc = mkImageCrop(imgIn, trimCfgView.value)
+        procTrim = Some(proc)
+        proc.foreach { imgTrim =>
+          onEDT {
+            val g = img1.createGraphics()
+            val sx = img1.getWidth .toDouble / imgTrim.getWidth
+            val sy = img1.getHeight.toDouble / imgTrim.getHeight
+            g.drawImage(imgTrim, AffineTransform.getScaleInstance(sx,sy), null)
+            comp1.repaint()
+            updateAxes1()
+          }
+        }
+      }
+    }
+
+    def runSource(): Unit = {
+      procSource.foreach(_.abort())
+      val proc    = mkImageIn(srcCfgView.value)
+      procSource  = Some(proc)
+      proc.foreach { imgIn =>
+        onEDT(runTrim())
+      }
+    }
+
+    srcCfgView.cell.addListener {
+      case _ => runSource()
+    }
+
+    trimCfgView.cell.addListener {
+      case _ => runTrim()
+    }
+
     def updateColors(): Unit = {
       proc.foreach { case (cfg, p) =>
         p.value.foreach {
@@ -219,7 +268,7 @@ object Trunks {
     }
 
     def updateColors1(cfg: Config, data: Any): Unit = {
-      val g       = img.createGraphics()
+      val g       = img1.createGraphics()
       g.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BILINEAR)
 //      val colrCfg = colrCfgView.value
 //      val img1    = mkImage(data, cfg = colrCfg)
@@ -238,7 +287,7 @@ object Trunks {
             res match {
               case Success(data) =>
                 updateColors1(lyaCfg, data)
-                updateAxes(lyaCfg)
+                // updateAxes(lyaCfg)
               case Failure(Processor.Aborted()) =>
               case Failure(ex) =>
                 ex.printStackTrace()
@@ -260,7 +309,7 @@ object Trunks {
       stopRendering()
       val cfg = cfgView.value
       val p = Processor[Any]("calc") { self =>
-        // calc(self, cfg.toLyaConfig1(fast = true))
+        // calc(self, cfg, fast = true)
       }
       proc = Some(cfg -> p)
       p.addListener(procL)
@@ -283,7 +332,7 @@ object Trunks {
         /* if (ggRender .selected) */ startRendering() // else stopRendering()
     }
 
-    updateAxes(cfg0)
+    // updateAxes()
 
 //    colrCfgView.cell.addListener {
 //      case _ =>
@@ -291,7 +340,7 @@ object Trunks {
 //    }
 
     val bp = new BorderPanel {
-      add(comp, BorderPanel.Position.Center)
+      add(comp1, BorderPanel.Position.Center)
       add(new BoxPanel(Orientation.Horizontal) {
         contents += HStrut(16)
         contents += hAxis1
@@ -382,7 +431,9 @@ object Trunks {
       contents = new BorderPanel {
         add(bp, BorderPanel.Position.Center)
         add(new BoxPanel(Orientation.Vertical) {
-          contents += cfgView .component
+          contents += srcCfgView .component
+          contents += trimCfgView.component
+          contents += cfgView    .component
           contents += new FlowPanel(ggRender)
         }, BorderPanel.Position.East)
       }
@@ -393,6 +444,47 @@ object Trunks {
     }
     fr.defaultCloseOperation = CloseOperation.Exit
 
-    ggRender.doClick()
+    runSource()
+  }
+
+  def mkImageIn(source: Source): Processor[BufferedImage] = {
+    val res = new MkImageIn(source)
+    res.start()
+    res.onFailure { case ex => ex.printStackTrace() }
+    res
+  }
+
+  private class MkImageIn(source: Source)
+    extends ProcessorImpl[BufferedImage, Processor[BufferedImage]] with Processor[BufferedImage] {
+
+    def body(): BufferedImage = blocking {
+      val fIn     = file("trunks_vid") / "image_in" / s"trunk${source.id}.png"
+      if (!fIn.isFile) throw new FileNotFoundException(fIn.path)
+      val imgIn   = ImageIO.read(fIn)
+//      val imgOut  = cropImage(imgIn, trimLeft, trimTop,
+//        imgIn.getWidth - (trimLeft + trimRight), imgIn.getHeight - (trimTop + trimBottom))
+      progress = 1.0
+      checkAborted()
+      imgIn
+    }
+  }
+
+  def mkImageCrop(source: BufferedImage, trim: Trim): Processor[BufferedImage] = {
+    val res = new MkImageCrop(source, trim)
+    res.start()
+    res.onFailure { case ex => ex.printStackTrace() }
+    res
+  }
+
+  private class MkImageCrop(source: BufferedImage, trim: Trim)
+    extends ProcessorImpl[BufferedImage, Processor[BufferedImage]] with Processor[BufferedImage] {
+
+    def body(): BufferedImage = blocking {
+      val imgOut  = cropImage(source, trim.left, trim.top,
+        source.getWidth - (trim.left + trim.right), source.getHeight - (trim.top + trim.bottom))
+      progress = 1.0
+      checkAborted()
+      imgOut
+    }
   }
 }
