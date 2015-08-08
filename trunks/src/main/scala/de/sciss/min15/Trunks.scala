@@ -17,7 +17,7 @@ package de.sciss.min15
 import java.awt.geom.{AffineTransform, Point2D}
 import java.awt.image.BufferedImage
 import java.awt.{Color, Cursor}
-import java.io.{FileInputStream, FileNotFoundException}
+import java.io.{FileOutputStream, FileInputStream, FileNotFoundException}
 import javax.imageio.ImageIO
 import javax.swing.KeyStroke
 
@@ -28,11 +28,12 @@ import de.sciss.desktop.FileDialog
 import de.sciss.file._
 import de.sciss.guiflitz.AutoView
 import de.sciss.numbers
+import de.sciss.play.json.AutoFormat
 import de.sciss.processor.Processor
 import de.sciss.processor.impl.ProcessorImpl
 import de.sciss.swingplus.CloseOperation
 import de.sciss.swingplus.Implicits._
-import play.api.libs.json.Json
+import play.api.libs.json.{Format, Json}
 
 import scala.concurrent.blocking
 import scala.swing.Swing._
@@ -59,13 +60,28 @@ object Trunks {
 
    */
 
+  object Situation {
+    implicit val format : Format[Situation]               = AutoFormat[Situation]
+    implicit val format2: Format[(Situation, Situation)]  = AutoFormat[(Situation, Situation)]
+  }
+  case class Situation(source: Source, trim: Trim, config: Config)
+
+  object Source {
+    implicit val format: Format[Source] = AutoFormat[Source]
+  }
   case class Source(id: Int)
 
+  object Trim {
+    implicit val format: Format[Trim] = AutoFormat[Trim]
+  }
   case class Trim(left: Int = 0, top: Int = 0, right: Int = 0, bottom: Int = 0)
 
-  case class Config(centerX: Int, centerY: Int, angleStart: Double, angleSpan: Double,
+  object Config {
+    implicit val format: Format[Config] = AutoFormat[Config]
+  }
+  case class Config(centerX: Double, centerY: Double, angleStart: Double, angleSpan: Double,
                     flipX: Boolean, flipY: Boolean,
-                    width: Int, height: Int, virtualWidth: Int, noise: Int, thresh: Int, invert: Boolean)
+                    width: Int, height: Int, noise: Int, thresh: Int, invert: Boolean)
 
   def mkFrame(): Unit = {
     val hAxis1  = new Axis(Orientation.Horizontal)
@@ -87,9 +103,9 @@ object Trunks {
     val avCfg   = AutoView.Config()
     avCfg.small = true
 
-    val cfg0 = Config(centerX = 1400, centerY = 1500, angleStart = 0.0, angleSpan = 360.0,
+    val cfg0 = Config(centerX = 2120, centerY = 2680, angleStart = 0.0, angleSpan = 360.0,
                       flipX = true, flipY = false,
-                      width = 2160, height = 2160, virtualWidth = 2160 /* * 8 */, noise = 10, thresh = 180,
+                      width = 2160, height = 2160 /* , virtualWidth = 2160 */ /* * 8 */, noise = 10, thresh = 180,
                       invert = true)
 
     val srcCfgView  = AutoView(Source(id = 11))
@@ -118,6 +134,9 @@ object Trunks {
           if (selected && !polarValid) runPolar()
       }
     }
+
+    def mkSituation(): Situation =
+      Situation(srcCfgView.value, trimCfgView.value, cfgView.value)
 
     lazy val comp: Component = new Component {
       preferredSize = (iw, ih)
@@ -191,7 +210,7 @@ object Trunks {
             val v1    = mouseToVirtual(mPress.point)
             val c     = cfgView.cell
             val c0    = c()
-            val c1    = c0.copy(centerX = (v1.getX + 0.5).toInt, centerY = (v1.getY + 0.5).toInt)
+            val c1    = c0.copy(centerX = v1.getX, centerY = v1.getY)
             c()       = c1
           }
 
@@ -340,18 +359,19 @@ object Trunks {
         contents += new MenuItem(new Action("Export Image...") {
           accelerator = Some(KeyStroke.getKeyStroke("ctrl S"))
           def apply(): Unit = {
-//            FileDialog.save(init = Some(userHome / s"trunk_${sit.hashCode.toHexString}.png")).show(None).foreach { f =>
-//              val pFull = renderImage(sit.lya.toLyaConfig1(fast = false), sit.color, f.replaceExt("png"))
-//              val futTail = pFull.map { _ =>
-//                val json = Situation.format.writes(sit).toString()
-//                blocking {
-//                  val jsonOut = new FileOutputStream(f.replaceExt("json"))
-//                  jsonOut.write(json.getBytes("UTF-8"))
-//                  jsonOut.close()
-//                }
-//              }
-//              mkProgressDialog("Exporting...", pFull, futTail)
-//            }
+            val sit = mkSituation()
+            FileDialog.save(init = Some(userHome / s"trunk_${sit.hashCode.toHexString}.png")).show(None).foreach { f =>
+              val pFull = renderImage(sit, f.replaceExt("png"))
+              val futTail = pFull.map { _ =>
+                val json = Situation.format.writes(sit).toString()
+                blocking {
+                  val jsonOut = new FileOutputStream(f.replaceExt("json"))
+                  jsonOut.write(json.getBytes("UTF-8"))
+                  jsonOut.close()
+                }
+              }
+              mkProgressDialog("Exporting...", pFull, futTail)
+            }
           }
         })
 
@@ -395,6 +415,27 @@ object Trunks {
     fr.defaultCloseOperation = CloseOperation.Exit
 
     runSource()
+  }
+
+  def renderImage(situation: Situation, f: File): Processor[Unit] = {
+    val res = new MkImage(situation, f)
+    res.start()
+    res
+  }
+
+  private class MkImage(situation: Situation, f: File)
+    extends ProcessorImpl[Unit, Processor[Unit]] with Processor[Unit] {
+
+    def body(): Unit = {
+      val step1   = mkImageIn(situation.source)
+      val imgIn   = await(step1, offset = 0.0, weight = 0.2)
+      val step2   = mkImageCrop(imgIn, situation.trim)
+      val imgTrim = await(step2, offset = 0.2, weight = 0.3)
+      val step3   = mkImagePolar(imgTrim, situation.trim, situation.config, fast = false)
+      val imgOut  = await(step3, offset = 0.3, weight = 0.9)
+      ImageIO.write(imgOut, "png", f)
+      progress = 1.0
+    }
   }
 
   def mkImageIn(source: Source): Processor[BufferedImage] = {
@@ -463,7 +504,7 @@ object Trunks {
       progress = 0.25
       checkAborted()
       val angleStart  = config.angleStart
-      val angleSpan   = config.angleSpan * config.width / config.virtualWidth
+      val angleSpan   = config.angleSpan // * config.width / config.virtualWidth
       println(f"cx = $cx%1.2f, cy = $cy%1.2f, angleStart = $angleStart%1.1f, angleSpan = $angleSpan%1.1f")
       val polarOp     = new MyPolar(angleStart = angleStart, angleSpan = angleSpan, cx = cx, cy = cy,
         flipX = config.flipX, flipY = config.flipY)
