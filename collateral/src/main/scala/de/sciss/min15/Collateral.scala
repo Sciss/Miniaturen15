@@ -17,16 +17,14 @@ package de.sciss.min15
 import java.awt.image.BufferedImage
 import javax.imageio.ImageIO
 
-import com.jhlabs.image.{ThresholdFilter, NoiseFilter}
+import com.jhlabs.image.{NoiseFilter, ThresholdFilter}
 import com.mortennobel.imagescaling.ResampleOp
 import de.sciss.file._
 import de.sciss.processor.Processor
 
-import scala.concurrent.{blocking, ExecutionContext}
+import scala.concurrent.blocking
 
 object Collateral {
-  import ExecutionContext.Implicits.global
-
   case class Config(fIn: File, fOut: File, firstFrame: Int, lastFrame: Int,
                     sizeIn: Int = 430, sizeOut: Int = 1080, noise: Int = 32, thresh: Int = 160)
 

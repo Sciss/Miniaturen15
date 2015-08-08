@@ -9,14 +9,24 @@ lazy val commonSettings = Seq(
   homepage            := Some(url(s"https://github.com/Sciss/$baseName")),
   scalaVersion        := "2.11.7",
   licenses            := Seq(cc_by_nc_nd),
-  scalacOptions      ++= Seq("-deprecation", "-unchecked", "-feature", "-encoding", "utf8", "-Xfuture")
+  scalacOptions      ++= Seq("-deprecation", "-unchecked", "-feature", "-encoding", "utf8", "-Xfuture"),
+  libraryDependencies ++= Seq(
+    "de.sciss"        %% "fileutil"           % "1.1.1",
+    "de.sciss"        %% "numbers"            % "0.1.1",
+    "de.sciss"        %% "processor"          % "0.4.0",
+    "com.mortennobel" % "java-image-scaling"  % "0.8.6",  // includes jh filters
+    "de.sciss"        %% "audiowidgets-swing" % "1.9.1",
+    "de.sciss"        %% "desktop"            % "0.7.1",
+    "de.sciss"        %% "guiflitz"           % "0.5.0",
+    "de.sciss"        %% "play-json-sealed"   % "0.2.0"
+  )
 )
 
 lazy val cc_by_nc_nd = "CC BY-NC-ND 4.0" -> url("http://creativecommons.org/licenses/by-nc-nd/4.0/legalcode")
 
 lazy val root = Project(id = baseNameL, base = file("."))
-  .aggregate(common, lyapunov, collateral)
-  .dependsOn(common, lyapunov, collateral)
+  .aggregate(common, lyapunov, collateral, trunks)
+  .dependsOn(common, lyapunov, collateral, trunks)
   .settings(commonSettings)
   .settings(
     publishArtifact in (Compile, packageBin) := false, // there are no binaries
@@ -26,13 +36,6 @@ lazy val root = Project(id = baseNameL, base = file("."))
 
 lazy val common = Project(id = s"$baseNameL-common", base = file("common"))
   .settings(commonSettings)
-  .settings(
-    libraryDependencies ++= Seq(
-      "de.sciss" %% "fileutil"           % "1.1.1",
-      "de.sciss" %% "numbers"            % "0.1.1",
-      "de.sciss" %% "processor"          % "0.4.0"
-    )
-  )
 
 lazy val lyapunov = Project(id = s"$baseNameL-lyapunov", base = file("lyapunov"))
   .dependsOn(common)
@@ -41,19 +44,14 @@ lazy val lyapunov = Project(id = s"$baseNameL-lyapunov", base = file("lyapunov")
     resolvers += Resolver.typesafeRepo("releases"),
     libraryDependencies ++= Seq(
       "de.sciss" %  "intensitypalette"   % "1.0.0",
-      "de.sciss" %% "scissdsp"           % "1.2.2",
-      "de.sciss" %% "audiowidgets-swing" % "1.9.1",
-      "de.sciss" %% "guiflitz"           % "0.5.0",
-      "de.sciss" %% "desktop"            % "0.7.1",
-      "de.sciss" %% "play-json-sealed"   % "0.2.0"
+      "de.sciss" %% "scissdsp"           % "1.2.2"
     )
   )
 
 lazy val collateral = Project(id = s"$baseNameL-collateral", base = file("collateral"))
   .dependsOn(common)
   .settings(commonSettings)
-  .settings(
-    libraryDependencies ++= Seq(
-      "com.mortennobel" % "java-image-scaling" % "0.8.6"
-    )
-  )
+
+lazy val trunks = Project(id = s"$baseNameL-trunks", base = file("trunks"))
+  .dependsOn(common)
+  .settings(commonSettings)

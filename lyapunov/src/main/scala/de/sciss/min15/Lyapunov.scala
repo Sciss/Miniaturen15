@@ -14,15 +14,15 @@
 
 package de.sciss.min15
 
-import java.awt.{RenderingHints, Cursor, Color}
-import java.awt.geom.{Point2D, AffineTransform}
+import java.awt.geom.{AffineTransform, Point2D}
 import java.awt.image.BufferedImage
+import java.awt.{Color, Cursor, RenderingHints}
 import java.io.{FileInputStream, FileOutputStream}
 import javax.imageio.ImageIO
 import javax.swing.{KeyStroke, UIManager}
 
 import de.sciss.audiowidgets.Axis
-import de.sciss.desktop.{OptionPane, FileDialog}
+import de.sciss.desktop.{FileDialog, OptionPane}
 import de.sciss.dsp.FastLog
 import de.sciss.file._
 import de.sciss.guiflitz.AutoView
@@ -34,29 +34,18 @@ import de.sciss.processor.Processor
 import de.sciss.processor.impl.ProcessorImpl
 import de.sciss.swingplus.CloseOperation
 import de.sciss.swingplus.Implicits._
-import play.api.libs.json.{Format, JsObject, JsArray, Json}
+import play.api.libs.json.{Format, JsArray, JsObject, Json}
 
 import scala.collection.breakOut
-import scala.concurrent.{blocking, Future, ExecutionContext}
+import scala.concurrent.{ExecutionContext, blocking}
 import scala.swing.Swing._
-import scala.swing.event.{MouseDragged, MouseReleased, MousePressed, MouseEvent, MouseMoved, MouseExited, MouseEntered, ButtonClicked}
-import scala.swing.{ProgressBar, Action, MenuItem, Menu, MenuBar, FlowPanel, Point, BorderPanel, BoxPanel, Button, Component, Frame, Graphics2D, Orientation}
+import scala.swing.event.{ButtonClicked, MouseDragged, MouseEntered, MouseEvent, MouseExited, MouseMoved, MousePressed, MouseReleased}
+import scala.swing.{Action, BorderPanel, BoxPanel, Button, Component, FlowPanel, Frame, Graphics2D, Menu, MenuBar, MenuItem, Orientation, Point}
 import scala.util.control.NonFatal
 import scala.util.{Failure, Success}
 
 object Lyapunov {
-  import ExecutionContext.Implicits.global
-
-  def main(args: Array[String]): Unit = {
-    onEDT {
-      try {
-        UIManager.setLookAndFeel(UIManager.getSystemLookAndFeelClassName)
-      } catch {
-        case NonFatal(_) => // ignore
-      }
-      mkFrame()
-    }
-  }
+  def main(args: Array[String]): Unit = runGUI(mkFrame())
 
   case class MovieConfig(duration: Double = 60.0, fps: Int = 25)
 
@@ -172,29 +161,6 @@ object Lyapunov {
     }
   }
 
-  def mkProgressDialog(title: String, p: Processor[Any], tail: Future[Any]): Unit = {
-    val ggProg  = new ProgressBar
-    val ggAbort = new Button("Abort")
-    val opt     = OptionPane(message = ggProg, messageType = OptionPane.Message.Plain, entries = Seq(ggAbort))
-
-    val optPeer = opt.peer
-    val dlg = optPeer.createDialog(title)
-    ggAbort.listenTo(ggAbort)
-    ggAbort.reactions += {
-      case ButtonClicked(_) =>
-        p.abort()
-    }
-    tail.onComplete(_ => onEDT(dlg.dispose()))
-    tail.onFailure {
-      case Processor.Aborted() =>
-      case ex => ex.printStackTrace()
-    }
-    p.addListener {
-      case prog @ Processor.Progress(_, _) => onEDT(ggProg.value = prog.toInt)
-    }
-    dlg.setVisible(true)
-  }
-
   def mkFrame(): Unit = {
     val hAxis1  = new Axis(Orientation.Horizontal)
     val vAxis1  = new Axis(Orientation.Vertical  )
@@ -209,7 +175,7 @@ object Lyapunov {
     avCfg.small = true
 
     val lyaCfg0 = LyaConfig(aMin = 0 * 1000, aMax = 4 * 1000, bMin = 0 * 1000, bMax = 4 * 1000,
-      seq = "AABBAAB", width = 2048, height = 2048, N = 1000)
+      seq = "AABBAAB", width = 2160, height = 2160, N = 1000)
     val colrCfg0 = ColorConfig(min = -0.5, max = 0.45, invert = true, noise = 0.0, thresh = 0.0)
 
     val lyaCfgView  = AutoView(lyaCfg0 , avCfg)
@@ -601,8 +567,8 @@ object Lyapunov {
   case class Result(data: Array[Array[Double]], stats: Stats)
 
   def mkImage(res: Result, cfg: ColorConfig): BufferedImage = {
-    import res.data
     import cfg._
+    import res.data
     val height    = data.length
     val width     = data(0).length
     val img       = new BufferedImage(width, height, if (thresh > 0) BufferedImage.TYPE_BYTE_BINARY else BufferedImage.TYPE_INT_ARGB)
