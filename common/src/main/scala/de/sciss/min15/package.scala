@@ -73,6 +73,15 @@ package object min15 {
     dlg.setVisible(true)
   }
 
+  def startAndReportProcessor[A](p: Processor[A] with Processor.Prepared): Processor[A] = {
+    p.onFailure {
+      case Processor.Aborted() =>
+      case ex => ex.printStackTrace()
+    }
+    p.start()
+    p
+  }
+
   //////////
 
   def cropImage(src: BufferedImage, x: Int, y: Int, width: Int, height: Int): BufferedImage =

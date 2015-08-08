@@ -14,30 +14,30 @@
 
 package de.sciss.min15
 
-import java.awt.{RenderingHints, Color, Cursor}
 import java.awt.geom.{AffineTransform, Point2D}
 import java.awt.image.BufferedImage
-import java.io.{FileNotFoundException, FileOutputStream, FileInputStream}
+import java.awt.{Color, Cursor}
+import java.io.{FileInputStream, FileNotFoundException}
 import javax.imageio.ImageIO
 import javax.swing.KeyStroke
 
+import com.jhlabs.image.{NoiseFilter, PolarFilter, ThresholdFilter}
+import com.mortennobel.imagescaling.ResampleOp
 import de.sciss.audiowidgets.Axis
-import de.sciss.desktop.{OptionPane, FileDialog}
+import de.sciss.desktop.FileDialog
 import de.sciss.file._
-import de.sciss.guiflitz.{Cell, AutoView}
-import de.sciss.model.Model
+import de.sciss.guiflitz.AutoView
 import de.sciss.numbers
 import de.sciss.processor.Processor
 import de.sciss.processor.impl.ProcessorImpl
 import de.sciss.swingplus.CloseOperation
 import de.sciss.swingplus.Implicits._
-import play.api.libs.json.{JsObject, JsArray, Json}
+import play.api.libs.json.Json
 
 import scala.concurrent.blocking
-import scala.swing.{Action, MenuItem, Menu, MenuBar, Graphics2D, Point, Component, FlowPanel, BoxPanel, BorderPanel, Frame, Button, Orientation}
 import scala.swing.Swing._
-import scala.swing.event.{ButtonClicked, MouseReleased, MousePressed, MouseDragged, MouseMoved, MouseExited, MouseEntered, MouseEvent}
-import scala.util.{Failure, Success}
+import scala.swing.event.{ButtonClicked, MouseDragged, MouseEntered, MouseEvent, MouseExited, MouseMoved, MousePressed, MouseReleased}
+import scala.swing.{Action, BorderPanel, BoxPanel, Component, FlowPanel, Frame, Graphics2D, Menu, MenuBar, MenuItem, Orientation, Point, ToggleButton}
 
 object Trunks {
   def main(args: Array[String]): Unit = runGUI(mkFrame())
@@ -53,13 +53,17 @@ object Trunks {
     - virtual width
     - noise, thresh, invert
 
+    for the polar transformation, we find the smallest
+    radius (left, top, bottom, right), and scale the
+    input up by target-height / smallest-radius.
+
    */
 
   case class Source(id: Int)
 
   case class Trim(left: Int = 0, top: Int = 0, right: Int = 0, bottom: Int = 0)
 
-  case class Config(centerX: Int, centerY: Int, angleStart: Double, angleStop: Double,
+  case class Config(centerX: Int, centerY: Int, angleStart: Double, angleSpan: Double,
                     width: Int, height: Int, virtualWidth: Int, noise: Int, thresh: Int, invert: Boolean)
 
   def mkFrame(): Unit = {
@@ -71,32 +75,24 @@ object Trunks {
     val iw      = 640
     val ih      = 640
     val img1    = new BufferedImage(iw, ih, BufferedImage.TYPE_INT_ARGB)
+    val img2    = new BufferedImage(iw, ih, BufferedImage.TYPE_INT_ARGB)
+
+    var polarValid = false
 
     var procSource  = Option.empty[Processor[BufferedImage]]
     var procTrim    = Option.empty[Processor[BufferedImage]]
-    var proc        = Option.empty[(Config, Processor[Any])]
+    var procPolar   = Option.empty[Processor[BufferedImage]]
 
     val avCfg   = AutoView.Config()
     avCfg.small = true
 
-    val cfg0 = Config(centerX = 1400, centerY = 1500, angleStart = 0.0, angleStop = 360.0,
+    val cfg0 = Config(centerX = 1400, centerY = 1500, angleStart = 0.0, angleSpan = 360.0,
                       width = 2160, height = 2160, virtualWidth = 2160 * 8, noise = 0, thresh = 0,
                       invert = true)
 
     val srcCfgView  = AutoView(Source(id = 11))
     val trimCfgView = AutoView(Trim(left = 300, top = 400, right = 500, bottom = 900))
     val cfgView     = AutoView(cfg0, avCfg)
-
-    val progIcon = new ProgressIcon()
-
-    val ggRender = new Button("Render")
-    ggRender.preferredSize = {
-      val d = ggRender.preferredSize
-      d.width += 48
-      d
-    }
-    ggRender.minimumSize  = ggRender.preferredSize
-    ggRender.maximumSize  = ggRender.preferredSize
 
     def updateAxes1(): Unit = {
       imgInOption().foreach { imgIn =>
@@ -112,7 +108,16 @@ object Trunks {
       }
     }
 
-    lazy val comp1: Component = new Component {
+    lazy val ggPolar: ToggleButton = new ToggleButton("Output") {
+      listenTo(this)
+      reactions += {
+        case ButtonClicked(_) =>
+          comp.repaint()
+          if (selected && !polarValid) runPolar()
+      }
+    }
+
+    lazy val comp: Component = new Component {
       preferredSize = (iw, ih)
 
       listenTo(mouse.moves)
@@ -205,7 +210,8 @@ object Trunks {
 
       override protected def paintComponent(g: Graphics2D): Unit = {
         super.paintComponent(g)
-        g.drawImage(img1, 0, 0, peer)
+        val img = if (ggPolar.selected) img2 else img1
+        g.drawImage(img, 0, 0, peer)
         if (crossHair) {
           g.setXORMode(Color.white)
           g.drawLine(crossHairPt.x, 0, crossHairPt.x, peer.getHeight)
@@ -220,7 +226,26 @@ object Trunks {
       }
     }
 
-    def imgInOption(): Option[BufferedImage] = procSource.flatMap(_.value).flatMap(_.toOption)
+    def imgInOption  (): Option[BufferedImage] = procSource.flatMap(_.value).flatMap(_.toOption)
+    def imgTrimOption(): Option[BufferedImage] = procTrim  .flatMap(_.value).flatMap(_.toOption)
+
+    def runPolar(): Unit = {
+      procPolar.foreach(_.abort())
+      imgTrimOption().foreach { imgTrim =>
+        val proc = mkImagePolar(imgTrim, trimCfgView.value, cfgView.value, fast = true)
+        procPolar = Some(proc)
+        proc.foreach { imgPolar =>
+          onEDT {
+            val g   = img2.createGraphics()
+            val sx  = img2.getWidth .toDouble / imgPolar.getWidth
+            val sy  = img2.getHeight.toDouble / imgPolar.getHeight
+            g.drawImage(imgPolar, AffineTransform.getScaleInstance(sx ,sy), null)
+            comp.repaint()
+          }
+        }
+        polarValid = true
+      }
+    }
 
     def runTrim(): Unit = {
       procTrim.foreach(_.abort())
@@ -229,12 +254,13 @@ object Trunks {
         procTrim = Some(proc)
         proc.foreach { imgTrim =>
           onEDT {
-            val g = img1.createGraphics()
-            val sx = img1.getWidth .toDouble / imgTrim.getWidth
-            val sy = img1.getHeight.toDouble / imgTrim.getHeight
-            g.drawImage(imgTrim, AffineTransform.getScaleInstance(sx,sy), null)
-            comp1.repaint()
+            val g   = img1.createGraphics()
+            val sx  = img1.getWidth .toDouble / imgTrim.getWidth
+            val sy  = img1.getHeight.toDouble / imgTrim.getHeight
+            g.drawImage(imgTrim, AffineTransform.getScaleInstance(sx ,sy), null)
+            comp.repaint()
             updateAxes1()
+            if (ggPolar.selected) runPolar() else polarValid = false
           }
         }
       }
@@ -257,90 +283,13 @@ object Trunks {
       case _ => runTrim()
     }
 
-    def updateColors(): Unit = {
-      proc.foreach { case (cfg, p) =>
-        p.value.foreach {
-          case Success(data) =>
-            updateColors1(cfg, data)
-          case _ =>
-        }
-      }
+    cfgView.cell.addListener {
+      case _ =>
+        if (ggPolar.selected) runPolar() else polarValid = false
     }
-
-    def updateColors1(cfg: Config, data: Any): Unit = {
-      val g       = img1.createGraphics()
-      g.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BILINEAR)
-//      val colrCfg = colrCfgView.value
-//      val img1    = mkImage(data, cfg = colrCfg)
-//      val scale   = AffineTransform.getScaleInstance(iw.toDouble / 320 /* lyaCfg.width */, ih.toDouble / 320 /* lyaCfg.height */)
-//      g.drawImage(img1, scale, null)
-//      // g.drawImage(img1, 0, 0, null)
-//      g.dispose()
-//      comp.repaint()
-    }
-
-    val procL: Model.Listener[Processor.Update[Any, Any]] = {
-      case Processor.Result(p1, res) => onEDT {
-        proc.foreach {
-          case (lyaCfg, p2) if p1 == p2 =>
-            ggRender.icon = null
-            res match {
-              case Success(data) =>
-                updateColors1(lyaCfg, data)
-                // updateAxes(lyaCfg)
-              case Failure(Processor.Aborted()) =>
-              case Failure(ex) =>
-                ex.printStackTrace()
-            }
-
-          case _ =>
-        }
-      }
-
-      case prog @ Processor.Progress(p1, _) => onEDT {
-        if (proc.exists(_._2 == p1)) {
-          progIcon.value = prog.toInt
-          ggRender.repaint()
-        }
-      }
-    }
-
-    def startRendering(): Unit = {
-      stopRendering()
-      val cfg = cfgView.value
-      val p = Processor[Any]("calc") { self =>
-        // calc(self, cfg, fast = true)
-      }
-      proc = Some(cfg -> p)
-      p.addListener(procL)
-      progIcon.value = (p.progress * 100).toInt
-      ggRender.icon = progIcon
-    }
-
-    def stopRendering(): Unit = {
-      proc.foreach { case (_, p) =>
-        p.abort()
-        p.removeListener(procL)
-        ggRender.icon = null
-        proc = None
-      }
-    }
-
-    ggRender.listenTo(ggRender )
-    ggRender.reactions += {
-      case ButtonClicked(_) =>
-        /* if (ggRender .selected) */ startRendering() // else stopRendering()
-    }
-
-    // updateAxes()
-
-//    colrCfgView.cell.addListener {
-//      case _ =>
-//        updateColors()
-//    }
 
     val bp = new BorderPanel {
-      add(comp1, BorderPanel.Position.Center)
+      add(comp, BorderPanel.Position.Center)
       add(new BoxPanel(Orientation.Horizontal) {
         contents += HStrut(16)
         contents += hAxis1
@@ -434,7 +383,7 @@ object Trunks {
           contents += srcCfgView .component
           contents += trimCfgView.component
           contents += cfgView    .component
-          contents += new FlowPanel(ggRender)
+          contents += new FlowPanel(/* ggRender, */ ggPolar)
         }, BorderPanel.Position.East)
       }
       resizable = false
@@ -449,9 +398,7 @@ object Trunks {
 
   def mkImageIn(source: Source): Processor[BufferedImage] = {
     val res = new MkImageIn(source)
-    res.start()
-    res.onFailure { case ex => ex.printStackTrace() }
-    res
+    startAndReportProcessor(res)
   }
 
   private class MkImageIn(source: Source)
@@ -471,9 +418,7 @@ object Trunks {
 
   def mkImageCrop(source: BufferedImage, trim: Trim): Processor[BufferedImage] = {
     val res = new MkImageCrop(source, trim)
-    res.start()
-    res.onFailure { case ex => ex.printStackTrace() }
-    res
+    startAndReportProcessor(res)
   }
 
   private class MkImageCrop(source: BufferedImage, trim: Trim)
@@ -485,6 +430,82 @@ object Trunks {
       progress = 1.0
       checkAborted()
       imgOut
+    }
+  }
+
+  /** @param source the already trimmed image */
+  def mkImagePolar(source: BufferedImage, trim: Trim, config: Config, fast: Boolean): Processor[BufferedImage] = {
+    val res = new MkImagePolar(source, trim, config, fast = fast)
+    startAndReportProcessor(res)
+  }
+
+  private class MkImagePolar(source: BufferedImage, trim: Trim, config: Config, fast: Boolean)
+    extends ProcessorImpl[BufferedImage, Processor[BufferedImage]] with Processor[BufferedImage] {
+
+    def body(): BufferedImage = blocking {
+      val cxi         = config.centerX - trim.left
+      val cyi         = config.centerY - trim.top
+      val iw          = source.getWidth
+      val ih          = source.getHeight
+      val cx          = cxi.toDouble / iw
+      val cy          = cyi.toDouble / ih
+      val rxMin       = math.min(cx, 1.0 - cx) * iw
+      val ryMin       = math.min(cy, 1.0 - cy) * ih
+      val rMin        = math.min(rxMin, ryMin)
+      val scale       = config.height / rMin
+      val scaleW      = (iw * scale + 0.5).toInt
+      val scaleH      = (ih * scale + 0.5).toInt
+      val resampleOp  = new ResampleOp(scaleW, scaleH)
+      val imgScale    = resampleOp.filter(source, null)
+      progress = 0.25
+      checkAborted()
+      val angleStart  = config.angleStart
+      val angleSpan   = config.angleSpan * config.width / config.virtualWidth
+      val polarOp     = new MyPolar(angleStart = angleStart, angleSpan = angleSpan, cx = cx, cy = cy)
+      val imgPolar    = polarOp.filter(imgScale, null)
+      progress = 0.50
+      checkAborted()
+      val noiseOp     = new NoiseFilter
+      noiseOp.setAmount(config.noise)
+      noiseOp.setMonochrome(true)
+      val imgNoise    = noiseOp.filter(imgPolar, null)
+      progress = 0.75
+      checkAborted()
+      val threshOp    = new ThresholdFilter(config.thresh)
+      val imgOut      = threshOp.filter(imgNoise, null)
+      progress = 1.00
+      checkAborted()
+      imgOut
+    }
+  }
+
+  class MyPolar(angleStart: Double, angleSpan: Double, cx: Double, cy: Double) extends PolarFilter {
+    private var inWidth   = 0
+    private var inHeight  = 0
+
+    override def filter(src: BufferedImage, dst: BufferedImage): BufferedImage = {
+      inWidth     = src.getWidth
+      inHeight    = src.getHeight
+      super.filter(src, dst)
+    }
+
+    override def transformInverse(x: Int, y: Int, out: Array[Float]): Unit = {
+      // import config._
+      import numbers.Implicits._
+
+      val Pi2 = math.Pi * 2
+
+      val theta = ((x.linlin(0, inWidth, angleStart, angleStart + angleSpan) * math.Pi / 180) + Pi2) % Pi2
+      val cos   = math.cos(theta)
+      val sin   = math.sin(theta)
+      val rx    = if (cos >= 0) 1.0 - cx else cx
+      val ry    = if (sin  < 0) 1.0 - cy else cy
+
+      val px    = (cx + cos * rx) * inWidth
+      val py    = (cy - sin * ry) * inHeight
+
+      out(0)    = px.toFloat
+      out(1)    = py.toFloat
     }
   }
 }
