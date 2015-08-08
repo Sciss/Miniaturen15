@@ -10,6 +10,7 @@ lazy val commonSettings = Seq(
   scalaVersion        := "2.11.7",
   licenses            := Seq(cc_by_nc_nd),
   scalacOptions      ++= Seq("-deprecation", "-unchecked", "-feature", "-encoding", "utf8", "-Xfuture"),
+  resolvers += Resolver.typesafeRepo("releases"),
   libraryDependencies ++= Seq(
     "de.sciss"        %% "fileutil"           % "1.1.1",
     "de.sciss"        %% "numbers"            % "0.1.1",
@@ -41,7 +42,6 @@ lazy val lyapunov = Project(id = s"$baseNameL-lyapunov", base = file("lyapunov")
   .dependsOn(common)
   .settings(commonSettings)
   .settings(
-    resolvers += Resolver.typesafeRepo("releases"),
     libraryDependencies ++= Seq(
       "de.sciss" %  "intensitypalette"   % "1.0.0",
       "de.sciss" %% "scissdsp"           % "1.2.2"
