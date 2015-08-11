@@ -20,7 +20,8 @@ lazy val commonSettings = Seq(
     "de.sciss"        %% "desktop"            % "0.7.1",
     "de.sciss"        %% "guiflitz"           % "0.5.0",
     "de.sciss"        %% "play-json-sealed"   % "0.2.0",
-    "de.sciss"        %% "scissdsp"           % "1.2.2"
+    "de.sciss"        %% "scissdsp"           % "1.2.2",
+    "de.sciss"        %% "kollflitz"          % "0.2.0"
   )
 )
 
@@ -67,6 +68,11 @@ lazy val trunks = Project(id = s"$baseNameL-trunks", base = file("trunks"))
 lazy val text = Project(id = s"$baseNameL-text", base = file("text"))
   .dependsOn(common)
   .settings(commonSettings)
+  .settings(
+    libraryDependencies ++= Seq(
+      "de.sciss" % "prefuse-core" % "1.0.0"
+    )
+  )
 
 // ---- 5 ----
 
