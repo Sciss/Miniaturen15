@@ -19,7 +19,8 @@ lazy val commonSettings = Seq(
     "de.sciss"        %% "audiowidgets-swing" % "1.9.1",
     "de.sciss"        %% "desktop"            % "0.7.1",
     "de.sciss"        %% "guiflitz"           % "0.5.0",
-    "de.sciss"        %% "play-json-sealed"   % "0.2.0"
+    "de.sciss"        %% "play-json-sealed"   % "0.2.0",
+    "de.sciss"        %% "scissdsp"           % "1.2.2"
   )
 )
 
@@ -38,20 +39,35 @@ lazy val root = Project(id = baseNameL, base = file("."))
 lazy val common = Project(id = s"$baseNameL-common", base = file("common"))
   .settings(commonSettings)
 
+// ---- 1 ----
+
 lazy val lyapunov = Project(id = s"$baseNameL-lyapunov", base = file("lyapunov"))
   .dependsOn(common)
   .settings(commonSettings)
   .settings(
     libraryDependencies ++= Seq(
-      "de.sciss" %  "intensitypalette"   % "1.0.0",
-      "de.sciss" %% "scissdsp"           % "1.2.2"
+      "de.sciss" %  "intensitypalette"   % "1.0.0"
     )
   )
+
+// ---- 2 ----
 
 lazy val collateral = Project(id = s"$baseNameL-collateral", base = file("collateral"))
   .dependsOn(common)
   .settings(commonSettings)
 
+// ---- 3 ----
+
 lazy val trunks = Project(id = s"$baseNameL-trunks", base = file("trunks"))
   .dependsOn(common)
   .settings(commonSettings)
+
+// ---- 4 ----
+
+lazy val text = Project(id = s"$baseNameL-text", base = file("text"))
+  .dependsOn(common)
+  .settings(commonSettings)
+
+// ---- 5 ----
+
+// ?

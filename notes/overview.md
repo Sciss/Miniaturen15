@@ -20,7 +20,7 @@
 - lya        { graphics }
 - ast        { scans    }
 - text       { text     }
-- sound      { sound    }
+- sound      { sound    } ?
 - collateral { video    }
 
 # Collateral
