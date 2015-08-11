@@ -41,13 +41,12 @@ object Collateral {
   object Config {
     implicit val format: Format[Config] = AutoFormat[Config]
   }
-  case class Config(firstFrame: Int, lastFrame: Int,
+  case class Config(id: Int, firstFrame: Int, lastFrame: Int,
                     sizeIn: Int = 430, sizeOut: Int = 1080, noise: Int = 32, thresh: Int = 160,
                     resampleWindow: Int = 29)
 
   private val fBase = file("collateral_vid")
-  private val fIn   = fBase / "image_in"  / "collateral1-%d.png"
-  
+
   def main(args: Array[String]): Unit = runGUI(mkFrame())
 
   def mkFrame(): Unit = {
@@ -66,7 +65,7 @@ object Collateral {
     val avCfg   = AutoView.Config()
     avCfg.small = true
 
-    val cfg0    = Config(firstFrame = 231, lastFrame = 1006 - 1 /* 1780 */, thresh = 127, sizeIn = 320)
+    val cfg0    = Config(id = 1, firstFrame = 231, lastFrame = 1006 - 1 /* 1780 */, thresh = 127, sizeIn = 320)
 
     val cfgView  = AutoView(cfg0, avCfg)
 
@@ -232,8 +231,8 @@ object Collateral {
 
   def mkImage(config: Config, frame: Int): BufferedImage = {
     val imgCrop   = readFrame(config, frame)
-    val imgUp     = mkResize(config, imgCrop)
-    val imgNoise  = mkNoise(config, imgUp)
+    val imgUp     = mkResize (config, imgCrop)
+    val imgNoise  = mkNoise  (config, imgUp)
     mkThresh(config, imgNoise)
   }
 
@@ -242,14 +241,15 @@ object Collateral {
     cropImage(in, 145 + (430 - sizeIn)/2, 20 + (430 - sizeIn)/2, sizeIn, sizeIn)
   }
 
-  def mkFIn(frame: Int): File = {
+  def mkFIn(config: Config, frame: Int): File = {
+    val fIn   = fBase / "image_in"  / s"collateral${config.id}-%d.png"
     val dirIn   = fIn .parent
     val childIn = fIn .name
     dirIn  / childIn.replace("%d", frame.toString)
   }
 
   def readFrame(config: Config, frame: Int): BufferedImage = {
-    val fIn1      = mkFIn(frame)
+    val fIn1      = mkFIn(config, frame)
     val imgIn     = ImageIO.read(fIn1)
     val imgCrop   = cropImage2(config, imgIn)
     imgCrop
@@ -261,19 +261,20 @@ object Collateral {
     resizeOp.filter(in, null)
   }
   
-  def mkNoise(config: Config, in: BufferedImage): BufferedImage = {
+  def mkNoise(config: Config, in: BufferedImage): BufferedImage = if (config.noise <= 0) in else {
     val noiseOp = new NoiseFilter
     noiseOp.setAmount(config.noise)
     noiseOp.setMonochrome(true)
     noiseOp.filter(in, null)
   }
 
-  def mkThresh(config: Config, in: BufferedImage, out: BufferedImage = null): BufferedImage = {
-    import config.{thresh, sizeOut}
-    val threshOp  = new ThresholdFilter(thresh)
-    val out1      = if (out != null) out else new BufferedImage(sizeOut, sizeOut, BufferedImage.TYPE_BYTE_BINARY)
-    threshOp.filter(in, out1)
-  }
+  def mkThresh(config: Config, in: BufferedImage, out: BufferedImage = null): BufferedImage =
+    if (config.thresh <= 0) in else {
+      import config.{thresh, sizeOut}
+      val threshOp  = new ThresholdFilter(thresh)
+      val out1      = if (out != null) out else new BufferedImage(sizeOut, sizeOut, BufferedImage.TYPE_BYTE_BINARY)
+      threshOp.filter(in, out1)
+    }
 
   private final class RenderImageSequence(config: Config, fOut: File)
     extends ProcessorImpl[Unit, RenderImageSequence] with Processor[Unit] {
@@ -291,7 +292,9 @@ object Collateral {
 
       val dirOut        = fOut.parent
       val childOut      = fOut.base
-      val numInFrames   = lastFrame - firstFrame + 1
+      val numInFrames   = math.abs(lastFrame - firstFrame + 1)
+      val frameInMul    = if (lastFrame >= firstFrame) 1 else -1
+      val frameOff      = firstFrame // if (lastFrame >= firstFrame) firstFrame else lastFrame
       val numOutFrames  = numInFrames * 2
       val imgOut        = new BufferedImage(sizeOut, sizeOut, BufferedImage.TYPE_BYTE_BINARY)
 
@@ -300,7 +303,7 @@ object Collateral {
       // e.g. resampleWindow = 5, winH = 2 ; LLLRR
       val winH = resampleWindow / 2
 
-      var frame0      = readFrame(config, firstFrame)
+      var frame0      = readFrame(config, frameOff)
       val widthIn     = frame0.getWidth
       val heightIn    = frame0.getHeight
 
@@ -308,7 +311,7 @@ object Collateral {
 
       val frameWindow = Array.tabulate(resampleWindow) { i =>
         val j = i - winH
-        if (j <= 0) frame0 else readFrame(config, j + firstFrame)
+        if (j <= 0) frame0 else readFrame(config, j * frameInMul + frameOff)
       }
 
       frame0 = null // let it be GC'ed
@@ -367,7 +370,7 @@ object Collateral {
         // handle overlap
         System.arraycopy(frameWindow, 1, frameWindow, 0, resampleWindow - 1)
         if (frameIn < numInFrames) {
-          frameWindow(resampleWindow - 1) = readFrame(config, frameIn + firstFrame)
+          frameWindow(resampleWindow - 1) = readFrame(config, frameIn * frameInMul + frameOff)
         }
 
         frameIn  += 1
