@@ -14,67 +14,293 @@
 
 package de.sciss.min15
 
+import java.awt.geom.AffineTransform
 import java.awt.image.BufferedImage
+import java.io.{FileInputStream, FileOutputStream}
 import javax.imageio.ImageIO
+import javax.swing.{SpinnerNumberModel, KeyStroke}
 
 import com.jhlabs.image.{NoiseFilter, ThresholdFilter}
 import com.mortennobel.imagescaling.ResampleOp
+import de.sciss.desktop.FileDialog
 import de.sciss.dsp.Resample
 import de.sciss.file._
+import de.sciss.guiflitz.AutoView
+import de.sciss.play.json.AutoFormat
 import de.sciss.processor.Processor
+import de.sciss.processor.impl.ProcessorImpl
+import de.sciss.swingplus.{Spinner, CloseOperation}
+import de.sciss.swingplus.Implicits._
+import play.api.libs.json.{Format, Json}
 
 import scala.concurrent.blocking
+import scala.swing.Swing._
+import scala.swing.{FlowPanel, Action, BorderPanel, BoxPanel, Component, Frame, Graphics2D, Menu, MenuBar, MenuItem, Orientation}
 
 object Collateral {
-  case class Config(fIn: File, fOut: File, firstFrame: Int, lastFrame: Int,
+  object Config {
+    implicit val format: Format[Config] = AutoFormat[Config]
+  }
+  case class Config(firstFrame: Int, lastFrame: Int,
                     sizeIn: Int = 430, sizeOut: Int = 1080, noise: Int = 32, thresh: Int = 160,
                     resampleWindow: Int = 29)
 
-  def main(args: Array[String]): Unit = {
-    val fBase = file("collateral_vid")
-//    val c1 = Config(fIn  = fBase / "image_in"  / "collateral1-%d.png",
-//      fOut = fBase / "image_out" / "coll1out-%d.png",
-//      firstFrame = 231, lastFrame = 1780, thresh = 127, sizeIn = 320)
-//    run(c1)
-    val c1 = Config(fIn  = fBase / "image_in"  / "collateral1-%d.png",
-                    fOut = fBase / "image_out" / "coll1outR-%d.png",
-                    firstFrame = 231, lastFrame = 1006 - 1 /* 1780 */, thresh = 127, sizeIn = 320)
-    resample(c1)
+  private val fBase = file("collateral_vid")
+  private val fIn   = fBase / "image_in"  / "collateral1-%d.png"
+  
+  def main(args: Array[String]): Unit = runGUI(mkFrame())
+
+  def mkFrame(): Unit = {
+//    val hAxis1  = new Axis(Orientation.Horizontal)
+//    val vAxis1  = new Axis(Orientation.Vertical  )
+//    val hAxis2  = new Axis(Orientation.Horizontal)
+//    val vAxis2  = new Axis(Orientation.Vertical  )
+
+    val mFrame  = new SpinnerNumberModel(1, 1, 3297, 1)
+    val ggFrame = new Spinner(mFrame)
+
+    val iw      = 640
+    val ih      = 640
+    val img     = new BufferedImage(iw, ih, BufferedImage.TYPE_INT_ARGB)
+
+    val avCfg   = AutoView.Config()
+    avCfg.small = true
+
+    val cfg0    = Config(firstFrame = 231, lastFrame = 1006 - 1 /* 1780 */, thresh = 127, sizeIn = 320)
+
+    val cfgView  = AutoView(cfg0, avCfg)
+
+    def mkSituation(): Config = cfgView.value
+
+//    def updateAxes(cfg: Config): Unit = {
+//      hAxis1.minimum  = cfg.aMin
+//      hAxis1.maximum  = cfg.aMax
+//      vAxis1.minimum  = cfg.bMin
+//      vAxis1.maximum  = cfg.bMax
+//      hAxis2.minimum  = hAxis1.minimum
+//      hAxis2.maximum  = hAxis1.maximum
+//      vAxis2.minimum  = vAxis1.minimum
+//      vAxis2.maximum  = vAxis1.maximum
+//    }
+
+    val comp: Component = new Component {
+      preferredSize = (iw, ih)
+      override protected def paintComponent(g: Graphics2D): Unit = {
+        super.paintComponent(g)
+        g.drawImage(img, 0, 0, peer)
+      }
+    }
+
+    def updateImage(): Unit = {
+      val img1  = mkImage(cfgView.value, mFrame.getNumber.intValue())
+      val g     = img.createGraphics()
+      val sx    = img.getWidth .toDouble / img1.getWidth
+      val sy    = img.getHeight.toDouble / img1.getHeight
+      g.drawImage(img1, AffineTransform.getScaleInstance(sx, sy), null)
+      g.dispose()
+      comp.repaint()
+    }
+
+    cfgView.cell.addListener {
+      case _ => updateImage()
+    }
+
+    mFrame.addChangeListener(ChangeListener(_ => updateImage()))
+
+    val bp = new BorderPanel {
+      add(comp, BorderPanel.Position.Center)
+//      add(new BoxPanel(Orientation.Horizontal) {
+//        contents += HStrut(16)
+//        contents += hAxis1
+//        contents += HStrut(16)
+//      }, BorderPanel.Position.North )
+//      add(vAxis1, BorderPanel.Position.West  )
+//      add(new BoxPanel(Orientation.Horizontal) {
+//        contents += HStrut(16)
+//        contents += hAxis2
+//        contents += HStrut(16)
+//      }, BorderPanel.Position.South )
+//      add(vAxis2, BorderPanel.Position.East  )
+    }
+
+    val mb = new MenuBar {
+      contents += new Menu("File") {
+        contents += new MenuItem(new Action("Load Settings...") {
+          accelerator = Some(KeyStroke.getKeyStroke("ctrl O"))
+          def apply(): Unit = {
+            val dlg = FileDialog.open()
+            dlg.setFilter(_.ext.toLowerCase == "json")
+            dlg.show(None).foreach { f =>
+              val fin = new FileInputStream(f)
+              val arr = new Array[Byte](fin.available())
+              fin.read(arr)
+              fin.close()
+              val jsn = Json.parse(new String(arr, "UTF-8"))
+              val res = Json.fromJson[Config](jsn).get
+              cfgView.cell() = res // .lya
+            }
+          }
+        })
+
+        contents += new MenuItem(new Action("Export Image...") {
+          accelerator = Some(KeyStroke.getKeyStroke("ctrl S"))
+          def apply(): Unit = {
+            val sit = mkSituation()
+            FileDialog.save(init = Some(userHome / s"collat_${sit.hashCode.toHexString}.png")).show(None).foreach { f =>
+              val pFull = renderImage(sit, frame = mFrame.getNumber.intValue(), f = f.replaceExt("png"))
+              val futTail = pFull.map { _ =>
+                val json = Config.format.writes(sit).toString()
+                blocking {
+                  val jsonOut = new FileOutputStream(f.replaceExt("json"))
+                  jsonOut.write(json.getBytes("UTF-8"))
+                  jsonOut.close()
+                }
+              }
+              mkProgressDialog("Exporting...", pFull, futTail)
+            }
+          }
+        })
+
+        contents += new MenuItem(new Action("Export Image Sequence...") {
+          accelerator = Some(KeyStroke.getKeyStroke("ctrl shift S"))
+
+          def apply(): Unit = {
+            val cfg = mkSituation()
+            val initName = cfg.hashCode.toHexString
+            FileDialog.save(init = Some(userHome / s"collat_$initName.png")).show(None).foreach { f =>
+////              val pMovie    = AutoView(MovieConfig())
+////              val optMovie  = OptionPane.confirmation(message = pMovie.component,
+////                optionType = OptionPane.Options.OkCancel)
+////              if (optMovie.show(title = "Image Sequence Settings") == OptionPane.Result.Ok) {
+////                val MovieConfig(duration, fps) = pMovie.value
+//                val numFrames = (duration * fps + 0.5).toInt
+                val pFull = renderImageSequence(cfg, fOut = f)
+                mkProgressDialog("Exporting...", pFull, pFull)
+//              }
+            }
+          }
+        })
+      }
+    }
+
+    val fr = new Frame { self =>
+      title = "Collateral"
+      contents = new BorderPanel {
+        add(bp, BorderPanel.Position.Center)
+        add(new BoxPanel(Orientation.Vertical) {
+          contents += cfgView .component
+          contents += new FlowPanel(ggFrame)
+        }, BorderPanel.Position.East)
+      }
+      resizable = false
+      menuBar = mb
+      pack().centerOnScreen()
+      open()
+    }
+    fr.defaultCloseOperation = CloseOperation.Exit
+
+    // ggRender.doClick()
+    updateImage()
   }
 
-  def resample(config: Config): Unit = {
-    import config._
+  def renderImage(config: Config, frame: Int, f: File): Processor[Unit] = {
+    val res = new RenderImage(config, frame = frame, f = f)
+    res.start()
+    res
+  }
 
+  private final class RenderImage(config: Config, frame: Int, f: File)
+    extends ProcessorImpl[Unit, Processor[Unit]] with Processor[Unit] {
+
+    protected def body(): Unit = blocking {
+      val fOut  = f.replaceExt("png")
+      if (!fOut.exists()) {
+        val img = mkImage(config, frame = frame)
+        ImageIO.write(img, "png", fOut)
+      }
+      progress = 1.0
+    }
+  }
+
+  def renderImageSequence(config: Config, fOut: File): Processor[Unit] = {
+    import config.resampleWindow
     require(resampleWindow % 2 == 1, s"resampleWindow ($resampleWindow) must be odd")
+    val res = new RenderImageSequence(config = config, fOut = fOut)
+    res.start()
+    res
+  }
 
-    val p = Processor[Unit]("render") { self =>
-      val resizeOp      = new ResampleOp(sizeOut, sizeOut)
-      val noiseOp       = new NoiseFilter
-      noiseOp.setAmount(noise)
-      noiseOp.setMonochrome(true)
-      val threshOp      = new ThresholdFilter(thresh)
-      val dirIn         = fIn .parent
+  def mkImage(config: Config, frame: Int): BufferedImage = {
+    val imgCrop   = readFrame(config, frame)
+    val imgUp     = mkResize(config, imgCrop)
+    val imgNoise  = mkNoise(config, imgUp)
+    mkThresh(config, imgNoise)
+  }
+
+  def cropImage2(config: Config, in: BufferedImage): BufferedImage = {
+    import config.sizeIn
+    cropImage(in, 145 + (430 - sizeIn)/2, 20 + (430 - sizeIn)/2, sizeIn, sizeIn)
+  }
+
+  def mkFIn(frame: Int): File = {
+    val dirIn   = fIn .parent
+    val childIn = fIn .name
+    dirIn  / childIn.replace("%d", frame.toString)
+  }
+
+  def readFrame(config: Config, frame: Int): BufferedImage = {
+    val fIn1      = mkFIn(frame)
+    val imgIn     = ImageIO.read(fIn1)
+    val imgCrop   = cropImage2(config, imgIn)
+    imgCrop
+  }
+  
+  def mkResize(config: Config, in: BufferedImage): BufferedImage = {
+    import config.sizeOut
+    val resizeOp  = new ResampleOp(sizeOut, sizeOut)
+    resizeOp.filter(in, null)
+  }
+  
+  def mkNoise(config: Config, in: BufferedImage): BufferedImage = {
+    val noiseOp = new NoiseFilter
+    noiseOp.setAmount(config.noise)
+    noiseOp.setMonochrome(true)
+    noiseOp.filter(in, null)
+  }
+
+  def mkThresh(config: Config, in: BufferedImage, out: BufferedImage = null): BufferedImage = {
+    import config.{thresh, sizeOut}
+    val threshOp  = new ThresholdFilter(thresh)
+    val out1      = if (out != null) out else new BufferedImage(sizeOut, sizeOut, BufferedImage.TYPE_BYTE_BINARY)
+    threshOp.filter(in, out1)
+  }
+
+  private final class RenderImageSequence(config: Config, fOut: File)
+    extends ProcessorImpl[Unit, RenderImageSequence] with Processor[Unit] {
+
+    protected def body(): Unit = blocking {
+      val jsonF = fOut.replaceExt("json")
+      if (!jsonF.exists()) blocking {
+        val json    = Config.format.writes(config).toString()
+        val jsonOut = new FileOutputStream(jsonF)
+        jsonOut.write(json.getBytes("UTF-8"))
+        jsonOut.close()
+      }
+
+      import config._
+
       val dirOut        = fOut.parent
-      val childIn       = fIn .name
-      val childOut      = fOut.name
+      val childOut      = fOut.base
       val numInFrames   = lastFrame - firstFrame + 1
       val numOutFrames  = numInFrames * 2
       val imgOut        = new BufferedImage(sizeOut, sizeOut, BufferedImage.TYPE_BYTE_BINARY)
 
-      def mkFIn (x: Int): File = dirIn  / childIn .replace("%d", (x + firstFrame).toString)
-      def mkFOut(x: Int): File = dirOut / childOut.replace("%d", (x + 1).toString)
-
-      def readFrame(x: Int): BufferedImage = {
-        val fIn1      = mkFIn(x)
-        val imgIn     = ImageIO.read(fIn1)
-        val imgCrop   = cropImage(imgIn, 145 + (430 - sizeIn)/2, 20 + (430 - sizeIn)/2, sizeIn, sizeIn)
-        imgCrop
-      }
+      def mkFOut(frame: Int): File = dirOut / s"$childOut-$frame.png"
 
       // e.g. resampleWindow = 5, winH = 2 ; LLLRR
       val winH = resampleWindow / 2
 
-      var frame0      = readFrame(0)
+      var frame0      = readFrame(config, firstFrame)
       val widthIn     = frame0.getWidth
       val heightIn    = frame0.getHeight
 
@@ -82,7 +308,7 @@ object Collateral {
 
       val frameWindow = Array.tabulate(resampleWindow) { i =>
         val j = i - winH
-        if (j <= 0) frame0 else readFrame(j)
+        if (j <= 0) frame0 else readFrame(config, j + firstFrame)
       }
 
       frame0 = null // let it be GC'ed
@@ -122,17 +348,17 @@ object Collateral {
       var frameIn  = resampleWindow - winH
       var frameOut = 0
       while (frameOut < numOutFrames) {
-        val fOut1 = mkFOut(frameOut)
-        val fOut2 = mkFOut(frameOut + 1)
+        val fOut1 = mkFOut(frameOut + 1)
+        val fOut2 = mkFOut(frameOut + 2)
 
-        if (!fOut1.exists() || !fOut2.exists()) blocking {
+        if (!fOut1.exists() || !fOut2.exists()) {
           performResample()
           var off = 0
           while (off < 2) {
             val imgCrop   = imgRsmp(off)
-            val imgUp     = resizeOp.filter(imgCrop, null)
-            val imgNoise  = noiseOp.filter(imgUp, null)
-            threshOp.filter(imgNoise, imgOut)
+            val imgUp     = mkResize(config, imgCrop)
+            val imgNoise  = mkNoise(config, imgUp)
+            mkThresh(config, imgNoise, imgOut)
             ImageIO.write(imgOut, "png", if (off == 0) fOut1 else fOut2)
             off += 1
           }
@@ -141,19 +367,19 @@ object Collateral {
         // handle overlap
         System.arraycopy(frameWindow, 1, frameWindow, 0, resampleWindow - 1)
         if (frameIn < numInFrames) {
-          frameWindow(resampleWindow - 1) = readFrame(frameIn)
+          frameWindow(resampleWindow - 1) = readFrame(config, frameIn + firstFrame)
         }
 
         frameIn  += 1
         frameOut += 2
-        self.progress = frameIn.toDouble / numInFrames
-        self.checkAborted()
+        progress = frameIn.toDouble / numInFrames
+        checkAborted()
       }
     }
 
-    println("_" * 33)
-    p.monitor(printResult = false)
-
-    waitForProcessor(p)
+//    println("_" * 33)
+//    p.monitor(printResult = false)
+//
+//    waitForProcessor(p)
   }
 }
