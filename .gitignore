@@ -4,4 +4,6 @@ src_managed/
 project/boot/
 .idea/
 .idea_modules/
-image_out/
+lyapunov_vid/
+collateral_vid/
+trunks_vid/

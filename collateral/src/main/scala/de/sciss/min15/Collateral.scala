@@ -43,7 +43,7 @@ object Collateral {
   }
   case class Config(id: Int, firstFrame: Int, lastFrame: Int,
                     sizeIn: Int = 430, sizeOut: Int = 1080, noise: Int = 32, thresh: Int = 160,
-                    resampleWindow: Int = 29)
+                    resampleWindow: Int = 29, dropFrame: Int = 16, dropRate: Double = 6.032)
 
   private val fBase = file("collateral_vid")
 
@@ -292,9 +292,18 @@ object Collateral {
 
       val dirOut        = fOut.parent
       val childOut      = fOut.base
-      val numInFrames   = math.abs(lastFrame - firstFrame + 1)
       val frameInMul    = if (lastFrame >= firstFrame) 1 else -1
-      val frameOff      = firstFrame // if (lastFrame >= firstFrame) firstFrame else lastFrame
+      val frameSeq0     = firstFrame to lastFrame by frameInMul
+      val frameSeq      = if (dropRate <= 0) frameSeq0 else {
+        frameSeq0.filterNot { frame =>
+          val x     = ((frame - dropFrame) / dropRate + 0.5).toInt
+          val drop  = (x * dropRate + dropFrame + 0.5).toInt
+          frame == drop
+        }
+      }
+
+      val numInFrames   = frameSeq.size // math.abs(lastFrame - firstFrame + 1)
+      // val frameOff      = firstFrame // if (lastFrame >= firstFrame) firstFrame else lastFrame
       val numOutFrames  = numInFrames * 2
       val imgOut        = new BufferedImage(sizeOut, sizeOut, BufferedImage.TYPE_BYTE_BINARY)
 
@@ -303,7 +312,7 @@ object Collateral {
       // e.g. resampleWindow = 5, winH = 2 ; LLLRR
       val winH = resampleWindow / 2
 
-      var frame0      = readFrame(config, frameOff)
+      var frame0      = readFrame(config, frameSeq(0) /* frameOff */)
       val widthIn     = frame0.getWidth
       val heightIn    = frame0.getHeight
 
@@ -311,7 +320,7 @@ object Collateral {
 
       val frameWindow = Array.tabulate(resampleWindow) { i =>
         val j = i - winH
-        if (j <= 0) frame0 else readFrame(config, j * frameInMul + frameOff)
+        if (j <= 0) frame0 else readFrame(config, frameSeq(j) /* j * frameInMul + frameOff*/)
       }
 
       frame0 = null // let it be GC'ed
@@ -370,7 +379,7 @@ object Collateral {
         // handle overlap
         System.arraycopy(frameWindow, 1, frameWindow, 0, resampleWindow - 1)
         if (frameIn < numInFrames) {
-          frameWindow(resampleWindow - 1) = readFrame(config, frameIn * frameInMul + frameOff)
+          frameWindow(resampleWindow - 1) = readFrame(config, frameSeq(frameIn) /* frameIn * frameInMul + frameOff */)
         }
 
         frameIn  += 1
