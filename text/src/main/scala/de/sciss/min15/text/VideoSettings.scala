@@ -44,8 +44,8 @@ object VideoSettings {
 
     def baseFile_=(value: File): Unit = _baseFile = value
 
-    var width               = 1080 // 1920
-    var height              = 1920 // 1080
+    var width               = 2160 // 1080 // 1920
+    var height              = 2160 // 1920 // 1080
     var numFrames           = 10000
     var framesPerSecond     = 25
     var speedLimit          = 0.1

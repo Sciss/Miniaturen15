@@ -15,14 +15,13 @@
 package de.sciss.min15.text
 
 import java.awt.image.BufferedImage
-import java.awt.{Point, Color, Font, LayoutManager, RenderingHints}
-import java.io.FileInputStream
+import java.awt.{Color, Font, LayoutManager, Point, RenderingHints}
 import javax.imageio.ImageIO
 import javax.swing.JPanel
 
 import de.sciss.file._
-import de.sciss.{numbers, kollflitz}
 import de.sciss.processor.Processor
+import de.sciss.{kollflitz, numbers}
 import prefuse.action.assignment.ColorAction
 import prefuse.action.{ActionList, RepaintAction}
 import prefuse.activity.Activity
@@ -48,18 +47,12 @@ object Visual {
   val DEBUG = false
 
   // val VIDEO_WIDTH     = 720
-  private val VIDEO_HEIGHT    = 1920 // / 3 // 576
-  private val VIDEO_WIDTH_SQR = 1080 // / 3 // 1024 // 1024 : 576 = 16 : 9
+  private val VIDEO_HEIGHT    = 2160 // 1920 // / 3 // 576
+  private val VIDEO_WIDTH_SQR = 2160 // 1080 // / 3 // 1024 // 1024 : 576 = 16 : 9
 
   private lazy val _initFont: Font = {
-    //    val is  = Wolkenpumpe.getClass.getResourceAsStream("BellySansCondensed.ttf")
-    //    val res = Font.createFont(Font.TRUETYPE_FONT, is)
-    //    is.close()
-    //    val res = new Font(Font.SANS_SERIF, Font.PLAIN, 11)
-    //    res
-    //      // "SF Movie Poster Condensed"
-    //      new Font( "BellySansCondensed", Font.PLAIN, 12 )
-    val is  = new FileInputStream("dosis/Dosis-Medium.ttf")
+    // val is  = new FileInputStream("dosis/Dosis-Medium.ttf")
+    val is  = getClass.getClassLoader.getResourceAsStream("vesper_libre/VesperLibre-Regular.ttf")
     val res = Font.createFont(Font.TRUETYPE_FONT, is)
     is.close()
     res
@@ -188,6 +181,14 @@ object Visual {
       }
     }
 
+    private var _lineWidth = 320
+
+    def lineWidth: Int = _lineWidth
+    def lineWidth_=(value: Int): Unit = if (_lineWidth != value) {
+      _lineWidth = value
+      setText(_text)
+    }
+
     private def setText(value: String): Unit = {
       _text = value
 
@@ -220,8 +221,6 @@ object Visual {
         w
       }
 
-      val maxWidth = 320 // 360 // 400
-
       @tailrec def mkLines(words: Vec[Word], rem: Vec[Word], width: Int, res: Vec[Line]): Vec[Line] = {
         def flush(): Line = {
           words.foreachPair { (pred, succ) =>
@@ -235,7 +234,7 @@ object Visual {
         }
 
         // note: we allow the last word to exceed the maximum width
-        if (width > maxWidth && rem.headOption.map(_.letters.size).getOrElse(0) > 1) {
+        if (width > _lineWidth && rem.headOption.map(_.letters.size).getOrElse(0) > 1) {
           val line = flush()
           mkLines(Vector.empty, rem, 0, res :+ line)
         } else rem match {
@@ -581,6 +580,7 @@ object Visual {
 
     def saveFrameSeriesAsPNG(settings: VideoSettings): Processor[Unit] = {
       import settings.{text => _, _}
+
       import ExecutionContext.Implicits.global
 
       // def toFrames(sec: Double) = (sec * framesPerSecond + 0.5).toInt
@@ -619,8 +619,8 @@ object Visual {
           }
 
           import numbers.Implicits._
-          val animFrac = frame.clip(startAnim._1, stopAnim._1)
-            .linlin(startAnim._1, math.max(startAnim._1 + 1, stopAnim._1), 0, 1)
+          val animFrac = frame.clip(startAnim.frame, stopAnim.frame)
+            .linlin(startAnim.frame, math.max(startAnim.frame + 1, stopAnim.frame), 0, 1)
 
           execOnEDT {
             forceSimulator.getForces.foreach { force =>
@@ -628,8 +628,8 @@ object Visual {
               // println(s"----FORCE----$fName")
               for (i <- 0 until force.getParameterCount) {
                 val pName = force.getParameterName(i)
-                val startValOpt = startAnim._2.getOrElse(fName, Map.empty).get(pName)
-                val stopValOpt  = stopAnim ._2.getOrElse(fName, Map.empty).get(pName)
+                val startValOpt = startAnim.forceParameters.getOrElse(fName, Map.empty).get(pName)
+                val stopValOpt  = stopAnim .forceParameters.getOrElse(fName, Map.empty).get(pName)
 
                 val valOpt: Option[Float] = (startValOpt, stopValOpt) match {
                   case (Some(startVal), Some(stopVal)) => Some(startVal * (1 - animFrac) + stopVal * animFrac)
@@ -661,7 +661,7 @@ object Visual {
 
           frame += 1
 
-          if (frame >= stopAnim._1) {
+          if (frame >= stopAnim.frame) {
             startAnim = stopAnim
             animIdx += 1
             if (animIdx < anim.size) stopAnim = anim(animIdx)
