@@ -15,12 +15,13 @@
 package de.sciss.min15
 
 import java.io.{FileInputStream, FileOutputStream}
-import javax.swing.{Timer, KeyStroke}
 import javax.swing.event.{DocumentEvent, DocumentListener}
+import javax.swing.{KeyStroke, Timer}
 
 import de.sciss.desktop.FileDialog
 import de.sciss.file._
-import de.sciss.min15.text.{KeyFrame, Anim, TextLike, VideoSettings}
+import de.sciss.guiflitz.AutoView
+import de.sciss.min15.text.VideoSettings
 import de.sciss.play.json.AutoFormat
 import de.sciss.processor.Processor
 import de.sciss.processor.impl.ProcessorImpl
@@ -31,7 +32,7 @@ import scala.collection.breakOut
 import scala.concurrent.blocking
 import scala.swing.Swing._
 import scala.swing.event.ButtonClicked
-import scala.swing.{TextArea, Action, BorderPanel, BoxPanel, Button, Component, FlowPanel, Frame, Menu, MenuBar, MenuItem, Orientation, ProgressBar, ScrollPane, SplitPane, ToggleButton}
+import scala.swing.{Action, BorderPanel, BoxPanel, Button, Component, FlowPanel, Frame, Menu, MenuBar, MenuItem, Orientation, ProgressBar, TextArea, ToggleButton}
 import scala.util.{Failure, Success}
 
 object Text {
@@ -40,12 +41,12 @@ object Text {
   object Config {
     implicit val format: Format[Config] = AutoFormat[Config]
   }
-  case class Config(width: Int, height: Int, lineWidth: Int,
+  case class Config(size: Int, lineWidth: Int,
                     speedLimit: Double, noise: Int, threshold: Int, invert: Boolean) {
     def toVideoSettings: VideoSettings = {
       val b             = VideoSettings()
-      b.width           = width
-      b.height          = height
+      b.width           = size
+      b.height          = size
       b.speedLimit      = speedLimit
       b.baseFile        = ???
       b.anim            = ???
@@ -60,8 +61,14 @@ object Text {
 
   def mkFrame(): Unit = {
     val v = text.Visual()
+    // v.display.setDoubleBuffered(true)
 
     def mkSituation(): Config = ???
+
+    val avCfg   = AutoView.Config()
+    avCfg.small = true
+    val cfg0    = Config(size = 2160, lineWidth = 320, speedLimit = 0.1, noise = 0, threshold = 0, invert = false)
+    val cfgView = AutoView(cfg0, avCfg)
 
     val ggText = new TextArea(12, 40)
     val clpseText = new Timer(1000, ActionListener { _ =>
@@ -153,6 +160,7 @@ object Text {
 
     val pRight = new BoxPanel(Orientation.Vertical) {
       contents += Component.wrap(fPanel)
+      contents += cfgView.component
       contents += ggText
     }
     ggText.preferredSize = {
@@ -162,6 +170,14 @@ object Text {
     }
     ggText.minimumSize  = ggText.preferredSize
     ggText.maximumSize  = ggText.preferredSize
+
+    cfgView.cell.addListener { case _ =>
+      val cfg = cfgView.value
+      v.lineWidth = cfg.lineWidth
+      v.noise     = cfg.noise
+      v.threshold = cfg.threshold
+      // cfg.invert
+    }
 
     v.component.preferredSize = (640, 640)
 

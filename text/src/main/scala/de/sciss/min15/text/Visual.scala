@@ -15,10 +15,11 @@
 package de.sciss.min15.text
 
 import java.awt.image.BufferedImage
-import java.awt.{Color, Font, LayoutManager, Point, RenderingHints}
+import java.awt.{Graphics, Color, Font, LayoutManager, Point, RenderingHints}
 import javax.imageio.ImageIO
 import javax.swing.JPanel
 
+import com.jhlabs.image.{ThresholdFilter, NoiseFilter}
 import de.sciss.file._
 import de.sciss.processor.Processor
 import de.sciss.{kollflitz, numbers}
@@ -181,7 +182,22 @@ object Visual {
       }
     }
 
+    private val noiseOp = new NoiseFilter
+    noiseOp.setAmount(0)
+    noiseOp.setMonochrome(true)
+
+    private val threshOp = new ThresholdFilter(0)
+
     private var _lineWidth = 320
+
+    def noise: Int = noiseOp.getAmount
+    def noise_=(value: Int): Unit = noiseOp.setAmount(value)
+
+    def threshold: Int = threshOp.getLowerThreshold
+    def threshold_=(value: Int): Unit = {
+      threshOp.setLowerThreshold(value)
+      threshOp.setUpperThreshold(value)
+    }
 
     def lineWidth: Int = _lineWidth
     def lineWidth_=(value: Int): Unit = if (_lineWidth != value) {
@@ -363,6 +379,26 @@ object Visual {
           super.setRenderingHints(g)
           g.setRenderingHint(RenderingHints.KEY_STROKE_CONTROL,
             if (m_highQuality) RenderingHints.VALUE_STROKE_PURE else RenderingHints.VALUE_STROKE_NORMALIZE)
+        }
+
+        private var img2: BufferedImage = _
+        private var img3: BufferedImage = _
+
+        override def paintBufferToScreen(g: Graphics): Unit = this.synchronized {
+          var img = m_offscreen
+          if (noise > 0) {
+            if (img2 == null || img2.getWidth != m_offscreen.getWidth || img2.getHeight != m_offscreen.getHeight) {
+              img2 = new BufferedImage(m_offscreen.getWidth, m_offscreen.getHeight, BufferedImage.TYPE_INT_RGB)
+            }
+            img = noiseOp.filter(img, img2)
+          }
+          if (threshold > 0) {
+            if (img3 == null || img3.getWidth != m_offscreen.getWidth || img3.getHeight != m_offscreen.getHeight) {
+              img3 = new BufferedImage(m_offscreen.getWidth, m_offscreen.getHeight, BufferedImage.TYPE_BYTE_BINARY)
+            }
+            img = threshOp.filter(img, img3)
+          }
+          g.drawImage(img, 0, 0, null)
         }
       }
 
@@ -750,4 +786,8 @@ trait Visual {
   def layoutCounter: Int
 
   var autoZoom: Boolean
+
+  var noise     : Int
+  var threshold : Int
+  var lineWidth : Int
 }
