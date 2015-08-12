@@ -39,8 +39,8 @@ import play.api.libs.json.{Format, JsArray, JsObject, Json}
 import scala.collection.breakOut
 import scala.concurrent.blocking
 import scala.swing.Swing._
-import scala.swing.event.{ButtonClicked, MouseDragged, MouseEntered, MouseEvent, MouseExited, MouseMoved, MousePressed, MouseReleased}
-import scala.swing.{Action, BorderPanel, BoxPanel, Button, Component, FlowPanel, Frame, Graphics2D, Menu, MenuBar, MenuItem, Orientation, Point}
+import scala.swing.event.{ButtonClicked, MouseDragged, MouseEntered, MouseEvent, MouseExited, MouseMoved, MousePressed, MouseReleased, ValueChanged}
+import scala.swing.{Action, BorderPanel, BoxPanel, Button, Component, FlowPanel, Frame, Graphics2D, Menu, MenuBar, MenuItem, Orientation, Point, Slider}
 import scala.util.{Failure, Success}
 
 object Lyapunov {
@@ -73,55 +73,58 @@ object Lyapunov {
     res
   }
 
-  private final class RenderImageSequence(sitA: Situation, sitB: Situation, numFrames: Int, f: File)
-    extends ProcessorImpl[Unit, RenderImageSequence] with Processor[Unit] {
+  def mixLya(sitA: Situation, sitB: Situation, w2: Double, fast: Boolean = false): LyaConfig1 = {
+    val w1      = 1 - w2
+    val l1      = sitA.lya
+    val l2      = sitB.lya
+    val aMin    = l1.aMin   * w1 + l2.aMin   * w2
+    val aMax    = l1.aMax   * w1 + l2.aMax   * w2
+    val bMin    = l1.bMin   * w1 + l2.bMin   * w2
+    val bMax    = l1.bMax   * w1 + l2.bMax   * w2
+    val width   = l1.width  * w1 + l2.width  * w2
+    val height  = l1.height * w1 + l2.height * w2
+    val N       = l1.N      * w1 + l2.N      * w2
 
-    private val seqLen = lcm(sitA.lya.seq.length, sitB.lya.seq.length)
-    private val seqA   = {
+    val seqLen = lcm(sitA.lya.seq.length, sitB.lya.seq.length)
+    val seqA   = {
       val xs = stringToSeq(sitA.lya.seq)
       Vector.tabulate(seqLen)(i => xs(i % xs.length))
     }
-    private val seqB    = {
+    val seqB    = {
       val xs = stringToSeq(sitB.lya.seq)
       Vector.tabulate(seqLen)(i => xs(i % xs.length))
     }
-    private val seqAB = seqA zip seqB
+    val seqAB = seqA zip seqB
 
-    private def mixLya(w2: Double): LyaConfig1 = {
-      val w1      = 1 - w2
-      val l1      = sitA.lya
-      val l2      = sitB.lya
-      val aMin    = l1.aMin   * w1 + l2.aMin   * w2
-      val aMax    = l1.aMax   * w1 + l2.aMax   * w2
-      val bMin    = l1.bMin   * w1 + l2.bMin   * w2
-      val bMax    = l1.bMax   * w1 + l2.bMax   * w2
-      val width   = l1.width  * w1 + l2.width  * w2
-      val height  = l1.height * w1 + l2.height * w2
-      val N       = l1.N      * w1 + l2.N      * w2
-
-      val seq     = seqAB.map { case (x1, x2) =>
-          x1 * w1 + x2 * w2
-      }
-
-      // beware that LyaConfig1 has different scaling
-      val res0 = LyaConfig(aMin = aMin, aMax = aMax, bMin = bMin, bMax = bMax,
-        seq = l1.seq, width = (width + 0.5).toInt, height = (height + 0.5).toInt, N = (N + 0.5).toInt)
-      val res1 = res0.toLyaConfig1(fast = false)
-      val res2 = res1.copy(seq = seq)
-      res2
+    val seq     = seqAB.map { case (x1, x2) =>
+      x1 * w1 + x2 * w2
     }
 
-    private def mixColor(w2: Double): ColorConfig = {
-      val w1      = 1 - w2
-      val c1      = sitA.color
-      val c2      = sitB.color
-      val min     = c1.min    * w1 + c2.min    * w2
-      val max     = c1.max    * w1 + c2.max    * w2
-      val noise   = c1.noise  * w1 + c2.noise  * w2
-      val thresh  = c1.thresh * w1 + c2.thresh * w2
-      val invert  = if (w2 < 0.5) c1.invert else c2.invert
-      ColorConfig(min = min, max = max, invert = invert, noise = noise, thresh = thresh)
-    }
+    // beware that LyaConfig1 has different scaling
+    val res0 = LyaConfig(aMin = aMin, aMax = aMax, bMin = bMin, bMax = bMax,
+      seq = l1.seq, width = (width + 0.5).toInt, height = (height + 0.5).toInt, N = (N + 0.5).toInt)
+    val res1 = res0.toLyaConfig1(fast = fast)
+    val res2 = res1.copy(seq = seq)
+    res2
+  }
+
+  def mixColor(sitA: Situation, sitB: Situation, w2: Double): ColorConfig = {
+    val w1      = 1 - w2
+    val c1      = sitA.color
+    val c2      = sitB.color
+    val min     = c1.min    * w1 + c2.min    * w2
+    val max     = c1.max    * w1 + c2.max    * w2
+    val noise   = c1.noise  * w1 + c2.noise  * w2
+    val thresh  = c1.thresh * w1 + c2.thresh * w2
+    val invert  = if (w2 < 0.5) c1.invert else c2.invert
+    ColorConfig(min = min, max = max, invert = invert, noise = noise, thresh = thresh)
+  }
+
+  private final class RenderImageSequence(sitA: Situation, sitB: Situation, numFrames: Int, f: File)
+    extends ProcessorImpl[Unit, RenderImageSequence] with Processor[Unit] {
+
+    private def mixLya  (w2: Double): LyaConfig1  = Lyapunov.mixLya  (sitA, sitB, w2)
+    private def mixColor(w2: Double): ColorConfig = Lyapunov.mixColor(sitA, sitB, w2)
 
     protected def body(): Unit = {
       val jsonF = f.replaceExt("json")
@@ -235,7 +238,39 @@ object Lyapunov {
     val sitA    = new SituationView("A")
     val sitB    = new SituationView("B")
 
-    val comp: Component = new Component {
+    var procMix = Option.empty[Processor[Any]]
+
+    lazy val ggMix: Slider = new Slider {
+      min    = 0
+      value  = 0
+      max    = 159
+
+      listenTo(this)
+      reactions += {
+        case ValueChanged(_) =>
+          if (!adjusting) {
+            procMix.foreach(_.abort())
+
+            import numbers.Implicits._
+            val w2    = value.linlin(min, max, 0, 1)
+            val sitA1 = sitA.situation
+            val sitB1 = sitB.situation
+            val p = Processor[BufferedImage]("calc") { self =>
+              val lya   = mixLya  (sitA1, sitB1, w2, fast = true)
+              val colr  = mixColor(sitA1, sitB1, w2)
+              val res   = calc(self, lya)
+              val img   = mkImage(res, colr)
+              img
+            }
+            p.foreach { in =>
+              onEDT(updateImage(in))
+            }
+            procMix = Some(p)
+          }
+      }
+    }
+
+    lazy val comp: Component = new Component {
       preferredSize = (iw, ih)
 
       listenTo(mouse.moves)
@@ -354,13 +389,16 @@ object Lyapunov {
     }
 
     def updateColors1(lyaCfg: LyaConfig, data: Result): Unit = {
-      val g       = img.createGraphics()
-      g.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BILINEAR)
       val colrCfg = colrCfgView.value
       val img1    = mkImage(data, cfg = colrCfg)
+      updateImage(img1)
+    }
+
+    def updateImage(in: BufferedImage): Unit = {
+      val g       = img.createGraphics()
+      g.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BILINEAR)
       val scale   = AffineTransform.getScaleInstance(iw.toDouble / 320 /* lyaCfg.width */, ih.toDouble / 320 /* lyaCfg.height */)
-      g.drawImage(img1, scale, null)
-      // g.drawImage(img1, 0, 0, null)
+      g.drawImage(in, scale, null)
       g.dispose()
       comp.repaint()
     }
@@ -523,6 +561,7 @@ object Lyapunov {
           contents += colrCfgView.component
           contents += statsView  .component
           contents += new FlowPanel(ggRender, ggNormalize, sitA.component, sitB.component)
+          contents += ggMix
         }, BorderPanel.Position.East)
       }
       resizable = false
@@ -570,19 +609,38 @@ object Lyapunov {
     import res.data
     val height    = data.length
     val width     = data(0).length
-    val img       = new BufferedImage(width, height, if (thresh > 0) BufferedImage.TYPE_BYTE_BINARY else BufferedImage.TYPE_INT_ARGB)
+    val img       = new BufferedImage(width, height, if (thresh != 0) BufferedImage.TYPE_BYTE_BINARY else BufferedImage.TYPE_INT_ARGB)
     val g         = img.createGraphics()
     val noiseAmt  = if (noise <= 0) 0.0 else noise * 0.01
+
+    var threshN = 0.0
+
+    import numbers.Implicits._
+
+    if (thresh < 0) {
+      val ds  = data.flatten.sorted
+      val i   = math.max(0, math.min(ds.length - 1, (-thresh * 0.01 * ds.length + 0.5).toInt))
+      threshN = ds(i).linlin(min, max, 0, 1)
+    }
+
     var yi = 0
     while (yi < height) {
       var xi = 0
       while (xi < width) {
-        import numbers.Implicits._
         val lambda0 = data(yi)(xi)
-        val lambda1 = lambda0.linlin(min, max, 0, 1).clip(0, 1)
-        val lambda2 = if (invert) 1 - lambda1 else lambda1
-        val lambda3 = if (noiseAmt != 0) (math.random * 2 - 1) * noiseAmt + lambda2 else lambda2
-        val lambda  = if (thresh > 0) { if (lambda3 > thresh * 0.01) 1.0 else 0.0 } else lambda3
+        val lambda  = if (thresh >= 0) {
+          val lambda1 = lambda0.linlin(min, max, 0, 1).clip(0, 1)
+          val lambda2 = if (invert) 1 - lambda1 else lambda1
+          val lambda3 = if (noiseAmt != 0) (math.random * 2 - 1) * noiseAmt + lambda2 else lambda2
+          if (thresh > 0) {
+            if (lambda3 > thresh * 0.01) 1.0 else 0.0
+          } else lambda3
+        } else {
+          val lambda1 = lambda0.linlin(min, max, 0, 1) // .clip(0, 1)
+          val lambda2 = if (noiseAmt != 0) (math.random * 2 - 1) * noiseAmt + lambda1 else lambda1
+          val lambda3 = if (lambda2 > threshN) 1.0 else 0.0
+          if (invert) 1 - lambda3 else lambda3
+        }
         val rgb = IntensityPalette.apply(lambda.toFloat)
         g.setColor(new Color(rgb))
         g.fillRect(xi, height - yi - 1, 1, 1)
