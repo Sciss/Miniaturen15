@@ -35,7 +35,7 @@ object AssembleCollat7a510609 extends App {
     "-vcodec", "libxvid",
     "-r", "25",
     "-q", "100",
-    "-pass", "1",
+    "-pass", "2", // "1",
     "-vf", "scale=1080:1080,fade=type=in:start_frame=0:nb_frames=12",
     "-aspect", "1:1",
     "-vb", "6M",
