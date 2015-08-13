@@ -25,7 +25,7 @@
 
 # Collateral
 
-## collat 1
+## Collateral 521f9faf
 
 Prepare input frames:
 
@@ -38,13 +38,21 @@ Prepare input frames:
 - begin frame 231 (1:27 == frame 1)
 - numFrames = 1500, 1550
 
-## collat 2
+Assemble video:
+
+    avconv -i 'collateral_vid/image_out/collat_521f9faf-%d.png' -vcodec libxvid -r 25 -q 100 -pass 1 \
+    -vf "scale=1080:1080,fade=type=in:start_frame=0:nb_frames=12,fade=type=out:start_frame=1525:nb_frames=25" \
+    -aspect 1:1 -vb 6M -threads 0 -f mp4 videos/collat_521f9faf.mp4
+
+## Collateral 7a510609
 
 Prepare input frames:
 
     avconv -i CollateralMurder_full.mp4 -ss 00:06:13 -t 00:01:05 -r 29.97 -f image2 collateral2-%d.png
 
 - stop time 00:07:17
+
+Note: this has two more frames than 1550. Use `AssembleCollat7a510609.scala` to  create the video.
 
 # Trunk
 
