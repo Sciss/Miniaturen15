@@ -27,6 +27,8 @@
 
 ## collat 1
 
+Prepare input frames:
+
     avconv -i CollateralMurder_full.mp4 -ss 00:01:27 -t 00:01:50 -r 29.97 -f image2 collateral1-%d.png
 
 - crop 430 x 430, horizontally centered (145), vertically offset (20)
@@ -38,6 +40,30 @@
 
 ## collat 2
 
+Prepare input frames:
+
     avconv -i CollateralMurder_full.mp4 -ss 00:06:13 -t 00:01:05 -r 29.97 -f image2 collateral2-%d.png
 
 - stop time 00:07:17
+
+# Trunk
+
+## trunk 1
+
+    avconv -i 'trunks_vid/image_out/trunk_ac0d8490-%d.png' -vcodec libxvid -r 25 -q 100 -pass 1 \
+    -vf "scale=1080:1080,fade=type=in:start_frame=0:nb_frames=12,fade=type=out:start_frame=1525:nb_frames=25" \
+    -aspect 1:1 -vb 6M -threads 0 -f mp4 videos/trunk_ac0d8490.mp4
+
+## trunk 2
+
+    avconv -i 'trunks_vid/image_out/trunk_c20b1a57-%d.png' -vcodec libxvid -r 25 -q 100 -pass 1 \
+    -vf "scale=1080:1080,fade=type=in:start_frame=0:nb_frames=12,fade=type=out:start_frame=1525:nb_frames=25" \
+    -aspect 1:1 -vb 6M -threads 0 -f mp4 videos/trunk_c20b1a57.mp4
+
+## trunk 3
+
+(Note the rotation)
+
+    avconv -i 'trunks_vid/image_out/trunk_45bc013a-%d.png' -vcodec libxvid -r 25 -q 100 -pass 1 \
+    -vf "scale=1080:1080,transpose=1,fade=type=in:start_frame=0:nb_frames=12,fade=type=out:start_frame=1525:nb_frames=25" \
+    -aspect 1:1 -vb 6M -threads 0 -f mp4 videos/trunk_45bc013a.mp4

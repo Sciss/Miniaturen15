@@ -81,7 +81,7 @@ object Trunks {
   object Config {
     implicit val format: Format[Config] = AutoFormat[Config]
   }
-  case class Config(centerX: Double, centerY: Double, angleStart: Double, angleSpan: Double,
+  case class Config(centerX: Double, centerY: Double, innerRadius: Double, angleStart: Double, angleSpan: Double,
                     flipX: Boolean, flipY: Boolean,
                     width: Int, height: Int, noise: Int, thresh: Int, invert: Boolean)
 
@@ -105,10 +105,11 @@ object Trunks {
     val avCfg   = AutoView.Config()
     avCfg.small = true
 
-    val cfg0 = Config(centerX = 2120, centerY = 2680, angleStart = 0.0, angleSpan = 360.0,
-                      flipX = true, flipY = false,
-                      width = 2160, height = 2160 /* , virtualWidth = 2160 */ /* * 8 */, noise = 20, thresh = 210,
-                      invert = true)
+    val cfg0 = Config(centerX = 2120, centerY = 2680, innerRadius = 0.0,
+      angleStart = 0.0, angleSpan = 360.0,
+      flipX = true, flipY = false,
+      width = 2160, height = 2160 /* , virtualWidth = 2160 */ /* * 8 */, noise = 20, thresh = 210,
+      invert = true)
 
     val srcCfgView  = AutoView(Source(id = 11))
     val trimCfgView = AutoView(Trim(left = 300, top = 400, right = 500, bottom = 900))
@@ -486,18 +487,20 @@ object Trunks {
 
       val c1          = sitA.config
       val c2          = sitB.config
-      val angleStart  = c1.angleStart * w1 + c2.angleStart  * w2
-      val angleSpan   = c1.angleSpan  * w1 + c2.angleSpan   * w2
-      val centerX     = c1.centerX    * w1 + c2.centerX     * w2
-      val centerY     = c1.centerY    * w1 + c2.centerY     * w2
-      val width       = c1.width      * w1 + c2.width       * w2
-      val height      = c1.height     * w1 + c2.height      * w2
-      val noise       = c1.noise      * w1 + c2.noise       * w2
-      val thresh      = c1.thresh     * w1 + c2.thresh      * w2
+      val angleStart  = c1.angleStart  * w1 + c2.angleStart  * w2
+      val angleSpan   = c1.angleSpan   * w1 + c2.angleSpan   * w2
+      val centerX     = c1.centerX     * w1 + c2.centerX     * w2
+      val centerY     = c1.centerY     * w1 + c2.centerY     * w2
+      val innerRadius = c1.innerRadius * w1 + c2.innerRadius * w2
+      val width       = c1.width       * w1 + c2.width       * w2
+      val height      = c1.height      * w1 + c2.height      * w2
+      val noise       = c1.noise       * w1 + c2.noise       * w2
+      val thresh      = c1.thresh      * w1 + c2.thresh      * w2
       val invert      = if (w2 < 0.5) c1.invert else c2.invert
       val flipX       = if (w2 < 0.5) c1.flipX  else c2.flipX
       val flipY       = if (w2 < 0.5) c1.flipY  else c2.flipY
-      val cfgMix      = Config(centerX = centerX, centerY = centerY, angleStart = angleStart, angleSpan = angleSpan,
+      val cfgMix      = Config(centerX = centerX, centerY = centerY,
+        innerRadius = innerRadius, angleStart = angleStart, angleSpan = angleSpan,
         flipX = flipX, flipY = flipY, width = (width + 0.5).toInt, height = (height + 0.5).toInt,
         noise = (noise + 0.5).toInt, thresh = (thresh + 0.5).toInt, invert = invert)
 
@@ -605,10 +608,10 @@ object Trunks {
       }
       progress = 0.25
       checkAborted()
-      val angleStart  =  config.angleStart
-      val angleSpan   = config.angleSpan // * config.width / config.virtualWidth
+      import config.{angleStart, angleSpan, innerRadius}
       // println(f"cx = $cx%1.2f, cy = $cy%1.2f, angleStart = $angleStart%1.1f, angleSpan = $angleSpan%1.1f")
-      val polarOp     = new MyPolar(angleStart = angleStart, angleSpan = angleSpan, cx = cx, cy = cy,
+      val polarOp     = new MyPolar(innerRadius = innerRadius,
+          angleStart = angleStart, angleSpan = angleSpan, cx = cx, cy = cy,
         flipX = config.flipX, flipY = config.flipY)
       // val polarOp     = new PolarFilter
       polarOp.setType(PolarFilter.POLAR_TO_RECT)
@@ -646,7 +649,8 @@ object Trunks {
     }
   }
 
-  class MyPolar(angleStart: Double, angleSpan: Double, cx: Double, cy: Double, flipX: Boolean, flipY: Boolean)
+  class MyPolar(innerRadius: Double, angleStart: Double, angleSpan: Double,
+                cx: Double, cy: Double, flipX: Boolean, flipY: Boolean)
     extends PolarFilter {
 
     private var inWidth   = 0
@@ -675,7 +679,8 @@ object Trunks {
       val sin   = math.sin(theta)
       val rx    = if (cos >= 0) 1.0 - cx else cx
       val ry    = if (sin >= 0) 1.0 - cy else cy
-      val r     = (if (flipY) inHeight - y - 1 else y).toDouble / inHeight
+      val r0    = (if (flipY) inHeight - y - 1 else y).toDouble / inHeight
+      val r     = innerRadius + (1.0 - innerRadius) * r0
 
       val px    = (cx + cos * rx * r) * inWidth
       val py    = (cy - sin * ry * r) * inHeight
