@@ -48,22 +48,42 @@ Prepare input frames:
 
 # Trunk
 
-## trunk 1
+## Trunk ac0d8490
 
     avconv -i 'trunks_vid/image_out/trunk_ac0d8490-%d.png' -vcodec libxvid -r 25 -q 100 -pass 1 \
     -vf "scale=1080:1080,fade=type=in:start_frame=0:nb_frames=12,fade=type=out:start_frame=1525:nb_frames=25" \
     -aspect 1:1 -vb 6M -threads 0 -f mp4 videos/trunk_ac0d8490.mp4
 
-## trunk 2
+## Trunk c20b1a57
 
     avconv -i 'trunks_vid/image_out/trunk_c20b1a57-%d.png' -vcodec libxvid -r 25 -q 100 -pass 1 \
     -vf "scale=1080:1080,fade=type=in:start_frame=0:nb_frames=12,fade=type=out:start_frame=1525:nb_frames=25" \
     -aspect 1:1 -vb 6M -threads 0 -f mp4 videos/trunk_c20b1a57.mp4
 
-## trunk 3
+## Trunk 45bc013a
 
 (Note the rotation)
 
     avconv -i 'trunks_vid/image_out/trunk_45bc013a-%d.png' -vcodec libxvid -r 25 -q 100 -pass 1 \
     -vf "scale=1080:1080,transpose=1,fade=type=in:start_frame=0:nb_frames=12,fade=type=out:start_frame=1525:nb_frames=25" \
     -aspect 1:1 -vb 6M -threads 0 -f mp4 videos/trunk_45bc013a.mp4
+
+# Lyapunov
+
+## Lyapunov 1de991d8
+
+Combines beginning and ending of total four minutes rendering. Use `AssembleLya1de991d8s.scala` to  create the video.
+
+## Lyapunov 5aeddbc9
+
+    avconv -i 'lyapunov_vid/image_out/lya_5aeddbc9-%d.png' -vcodec libxvid -r 25 -q 100 -pass 1 \
+    -vf "scale=1080:1080,fade=type=in:start_frame=0:nb_frames=8,fade=type=out:start_frame=1525:nb_frames=25" \
+    -aspect 1:1 -vb 6M -threads 0 -f mp4 videos/lya_5aeddbc9.mp4
+
+## Lyapunov e224f03c
+
+Note the limitation on the number of frames (`-vframes`)
+
+    avconv -i 'lyapunov_vid/image_out/lya_e224f03c-%d.png' -vcodec libxvid -r 25 -q 100 -pass 1 \
+    -vf "scale=1080:1080,fade=type=in:start_frame=0:nb_frames=8,fade=type=out:start_frame=1525:nb_frames=25" \
+    -vframes 1550 -aspect 1:1 -vb 6M -threads 0 -f mp4 videos/lya_e224f03c.mp4
