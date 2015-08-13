@@ -34,6 +34,8 @@ class MySpringForce extends SpringForce {
 
   private val rand = new Random(11223344L)
 
+  def setSeed(n: Long): Unit = rand.setSeed(n)
+
   //                                    htorque vtorque distance vspring   vlength
   params    = params    ++ Array[Float](5e-5f , 5e-5f , -1f    , 8.0e-5f,  100f)
   minValues = minValues ++ Array[Float](0f    , 0f    , -1f    , 0f     ,    1f)

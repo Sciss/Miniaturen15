@@ -57,13 +57,14 @@ object Text {
     }
   }
 
+  object Situation {
+    implicit val format: Format[Situation] = AutoFormat[Situation]
+  }
   case class Situation(config: Config, forceParameters: Map[String, Map[String, Float]], text: String)
 
   def mkFrame(): Unit = {
     val v = text.Visual()
     // v.display.setDoubleBuffered(true)
-
-    def mkSituation(): Config = ???
 
     val avCfg   = AutoView.Config()
     avCfg.small = true
@@ -82,6 +83,13 @@ object Text {
       def changedUpdate(e: DocumentEvent): Unit = clpseText.restart()
       def removeUpdate (e: DocumentEvent): Unit = clpseText.restart()
     })
+
+    def mkSituation(): Situation = {
+      val config  = cfgView.value
+      val text    = ggText.text
+      val force   = v.forceParameters
+      Situation(config = config, forceParameters = force, text = text)
+    }
 
     val ggAutoZoom = new ToggleButton("Zoom") {
       selected = true
@@ -215,7 +223,7 @@ object Text {
             FileDialog.save(init = Some(userHome / s"collat_${sit.hashCode.toHexString}.png")).show(None).foreach { f =>
               val pFull = renderImage(v, sit, f = f.replaceExt("png"))
               val futTail = pFull.map { _ =>
-                val json = Config.format.writes(sit).toString()
+                val json = Situation.format.writes(sit).toString()
                 blocking {
                   val jsonOut = new FileOutputStream(f.replaceExt("json"))
                   jsonOut.write(json.getBytes("UTF-8"))
@@ -256,20 +264,20 @@ object Text {
     }
   }
 
-  def renderImage(v: text.Visual, config: Config, f: File): Processor[Unit] = {
-    val res = new RenderImage(v = v, config, f = f)
+  def renderImage(v: text.Visual, sit: Situation, f: File): Processor[Unit] = {
+    val res = new RenderImage(v = v, sit = sit, f = f)
     res.start()
     res
   }
 
-  private final class RenderImage(v: text.Visual, config: Config, f: File)
+  private final class RenderImage(v: text.Visual, sit: Situation, f: File)
     extends ProcessorImpl[Unit, Processor[Unit]] with Processor[Unit] {
 
     protected def body(): Unit = blocking {
       val fOut  = f.replaceExt("png")
       if (!fOut.exists()) {
-        val vs = config.toVideoSettings
-        v.saveFrameAsPNG(f, width = vs.width, height = vs.height)
+        // val vs = sit.config.toVideoSettings
+        v.saveFrameAsPNG(f, width = sit.config.size /* vs.width */, height = sit.config.size)
       }
       progress = 1.0
     }
