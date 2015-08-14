@@ -219,7 +219,7 @@ object Text {
       v.lineWidth = cfg.lineWidth
       v.noise     = cfg.noise
       v.threshold = cfg.threshold
-      v.imageSize = new Dimension(cfg.size, cfg.size)
+      v.imageSize = v.display.getSize // new Dimension(cfg.size, cfg.size)
       // cfg.invert
     }
 

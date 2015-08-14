@@ -37,7 +37,7 @@ import prefuse.visual.{VisualGraph, VisualItem}
 import prefuse.{Constants, Display, Visualization}
 
 import scala.annotation.tailrec
-import scala.collection.breakOut
+import scala.collection.{JavaConversions, breakOut}
 import scala.collection.immutable.{IndexedSeq => Vec}
 import scala.concurrent.duration.Duration
 import scala.concurrent.{Await, ExecutionContext, Promise, blocking}
@@ -50,8 +50,10 @@ object Visual {
 
   private lazy val _initFont: Font = {
     // val is  = new FileInputStream("dosis/Dosis-Medium.ttf")
-    val is  = getClass.getClassLoader.getResourceAsStream("vesper_libre/VesperLibre-Regular.ttf")
-    val res = Font.createFont(Font.TRUETYPE_FONT, is)
+    // val name  = "vesper_libre/VesperLibre-Regular.ttf"
+    val name  = "roboto/Roboto-Medium.ttf"
+    val is    = getClass.getClassLoader.getResourceAsStream(name)
+    val res   = Font.createFont(Font.TRUETYPE_FONT, is)
     is.close()
     res
   }
@@ -196,8 +198,12 @@ object Visual {
 
     private var _lineWidth = 320
 
-    def noise: Int = (noiseOp.getScale * 4 + 0.5).toInt // .getAmount
-    def noise_=(value: Int): Unit = noiseOp.setScale(value * 0.25f)
+    private var _noise = 0.0
+
+    def noise: Double = _noise
+    def noise_=(value: Double): Unit = {
+      _noise = value // noiseOp.setScale(value * 0.25f)
+    }
 
     def threshold: Int = threshOp.getLowerThreshold
     def threshold_=(value: Int): Unit = {
@@ -443,12 +449,16 @@ object Visual {
           var img = m_offscreen
           if (noise > 0) {
             if (img2 == null || img2.getWidth != m_offscreen.getWidth || img2.getHeight != m_offscreen.getHeight) {
+              // println(s"NEW NOISE BUF ${m_offscreen.getWidth}, ${m_offscreen.getHeight}")
               img2 = new BufferedImage(m_offscreen.getWidth, m_offscreen.getHeight, BufferedImage.TYPE_INT_RGB)
             }
+            val sx = m_offscreen.getWidth.toDouble / _dsp.getWidth
+            noiseOp.setScale((_noise * 0.25 * sx).toFloat)
             img = noiseOp.filter(img, img2)
           }
           if (threshold > 0) {
             if (img3 == null || img3.getWidth != m_offscreen.getWidth || img3.getHeight != m_offscreen.getHeight) {
+              // println(s"NEW THRESH BUF ${m_offscreen.getWidth}, ${m_offscreen.getHeight}")
               img3 = new BufferedImage(m_offscreen.getWidth, m_offscreen.getHeight, BufferedImage.TYPE_BYTE_BINARY)
             }
             img = threshOp.filter(img, img3)
@@ -743,7 +753,17 @@ object Visual {
               display.setTransform(AffineTransform.getTranslateInstance(0, 0))
               display.panAbs(display.getWidth * 0.5, display.getHeight * 0.5)
               // display.zoomAbs(new Point(0, 0), 0.1)
+              import JavaConversions._
               setText(startSit.text)
+              _vis.visibleItems(GROUP_NODES).foreach {
+                case vi: VisualItem =>
+                  vi.setX(0)
+                  vi.setY(0)
+                  vi.setStartX(0)
+                  vi.setStartY(0)
+                  vi.setEndX(0)
+                  vi.setEndY(0)
+              }
               animationStep()
             }
             initialized = true
@@ -757,7 +777,7 @@ object Visual {
             val lineWidth       = if (w2 < 1) a.config.lineWidth else b.config.lineWidth
             val size            = (a.config.size      * w1 + b.config.size       * w2 + 0.5).toInt
             val speedLimit      = a.config.speedLimit * w1 + b.config.speedLimit * w2
-            val noise           = (a.config.noise     * w1 + b.config.noise      * w2 + 0.5).toInt
+            val noise           = a.config.noise      * w1 + b.config.noise      * w2
             val threshold       = (a.config.threshold * w1 + b.config.threshold  * w2 + 0.5).toInt
             val config          = Config(size = size, lineWidth = lineWidth, speedLimit = speedLimit,
               noise = noise, threshold = threshold)
@@ -782,6 +802,7 @@ object Visual {
             threshold   = thisSit.config.threshold
             lineWidth   = thisSit.config.lineWidth
             text        = thisSit.text
+            imageSize   = new Dimension(thisSit.config.size, thisSit.config.size)
             forceSimulator.setSpeedLimit(thisSit.config.speedLimit.toFloat)
             forceParameters = thisSit.forceParameters
           }
@@ -895,7 +916,7 @@ trait Visual {
 
   var autoZoom: Boolean
 
-  var noise     : Int
+  var noise     : Double
   var threshold : Int
   var lineWidth : Int
 

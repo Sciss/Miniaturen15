@@ -22,7 +22,7 @@ package object text {
     implicit val format: Format[Config] = AutoFormat[Config]
   }
   case class Config(size: Int, lineWidth: Int,
-                    speedLimit: Double, noise: Int, threshold: Int)
+                    speedLimit: Double, noise: Double, threshold: Int)
 
   object Situation {
     implicit val format: Format[Situation] = AutoFormat[Situation]
