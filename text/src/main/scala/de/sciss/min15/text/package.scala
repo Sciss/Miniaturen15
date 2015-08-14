@@ -15,7 +15,7 @@
 package de.sciss.min15
 
 import de.sciss.play.json.AutoFormat
-import play.api.libs.json.Format
+import play.api.libs.json.{JsSuccess, JsError, JsArray, JsResult, JsValue, Format}
 
 package object text {
   object Config {
@@ -39,5 +39,24 @@ package object text {
   }
 
   // type Anim = Vec[(Int, Map[String, Map[String, Float]])]
-  type Anim = Vec[KeyFrame]
+  object Anim {
+    def empty = Vector.empty[KeyFrame]
+
+    implicit val format: Format[Anim] = new Format[Anim] {
+      def reads(json: JsValue): JsResult[Anim] = json match {
+        case JsArray(seq) =>
+          ((JsSuccess(Anim.empty): JsResult[Anim]) /: seq) { (res, js) =>
+            res.flatMap(in => KeyFrame.format.reads(js).map(in :+ _))
+          }
+
+        case _ => JsError("Not an array")
+      }
+
+      def writes(anim: Anim): JsValue = {
+        val inner = anim.map(KeyFrame.format.writes)
+        JsArray(inner)
+      }
+    }
+  }
+  type Anim = Vector[KeyFrame]
 }

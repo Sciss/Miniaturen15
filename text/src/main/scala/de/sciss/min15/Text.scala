@@ -21,21 +21,23 @@ import javax.swing.{KeyStroke, Timer}
 import de.sciss.desktop.{FileDialog, OptionPane}
 import de.sciss.file._
 import de.sciss.guiflitz.AutoView
-import de.sciss.min15.text.{Config, KeyFrame, Situation, VideoSettings}
+import de.sciss.min15.text.{Anim, Config, KeyFrame, Situation}
 import de.sciss.processor.Processor
 import de.sciss.processor.impl.ProcessorImpl
 import de.sciss.swingplus.ListView
-import play.api.libs.json.Json
+import play.api.libs.json.{JsArray, Json}
 import prefuse.util.ui.JForcePanel
 
+import scala.collection.mutable
 import scala.concurrent.blocking
 import scala.swing.Swing._
 import scala.swing.event.ButtonClicked
 import scala.swing.{Action, BorderPanel, BoxPanel, Button, Component, Dimension, FlowPanel, Frame, Label, Menu, MenuBar, MenuItem, Orientation, ScrollPane, TextArea, ToggleButton}
-import scala.util.{Failure, Success}
 
 object Text {
   def main(args: Array[String]): Unit = runGUI(mkFrame())
+
+  case class MovieConfig(duration: Double = 60.0, fps: Int = 25)
 
   def mkFrame(): Unit = {
     val v = text.Visual()
@@ -72,7 +74,15 @@ object Text {
       Situation(config = config, forceParameters = force, text = text)
     }
 
-    val ggAutoZoom = new ToggleButton("Zoom") {
+    def setSituation(sit: Situation): Unit = {
+      ggText.text       = sit.text
+      textUpdated()
+      cfgView.cell()    = sit.config
+      v.forceParameters = sit.forceParameters
+      mkForcePanel()  // XXX TODO - not cool
+    }
+
+    lazy val ggAutoZoom: ToggleButton = new ToggleButton("Zoom") {
       selected = true
       listenTo(this)
       reactions += {
@@ -81,7 +91,7 @@ object Text {
       }
     }
 
-    val ggRunAnim = new ToggleButton("Anim") {
+    lazy val ggRunAnim: ToggleButton = new ToggleButton("Anim") {
       listenTo(this)
       reactions += {
         case ButtonClicked(_) =>
@@ -93,10 +103,10 @@ object Text {
 //      v.animationStep()
 //    }
 
-    val mSnapshots    = ListView.Model.empty[KeyFrame]
-    val ggSnapshots   = new ListView[KeyFrame](mSnapshots)
+    lazy val mSnapshots: ListView.Model[KeyFrame] with mutable.Buffer[KeyFrame] = ListView.Model.empty
+    lazy val ggSnapshots: ListView[KeyFrame] = new ListView(mSnapshots)
     ggSnapshots.visibleRowCount = 6
-    val ggAddSnapshot = Button("Add") {
+    lazy val ggAddSnapshot: Button = Button("Add") {
       val sit       = mkSituation()
       val initFrame = mSnapshots.lastOption.map(_.frame + 250).getOrElse(0)
       val opt = OptionPane.textInput("Key Frame:", initial = initFrame.toString)
@@ -107,7 +117,7 @@ object Text {
         mSnapshots.insert(i, KeyFrame(frame, sit))
       }
     }
-    val ggMoveSnapshot = Button("Move") {
+    lazy val ggMoveSnapshot: Button = Button("Move") {
       ggSnapshots.selection.indices.headOption.foreach { row =>
         val old @ KeyFrame(initFrame, sit) = mSnapshots(row)
         val opt = OptionPane.textInput("Key Frame:", initial = initFrame.toString)
@@ -121,19 +131,15 @@ object Text {
         }
       }
     }
-    val ggRemoveSnapshot = Button("Remove") {
+    lazy val ggRemoveSnapshot: Button = Button("Remove") {
       ggSnapshots.selection.indices.toList.sorted.reverse.foreach { row =>
         mSnapshots.remove(row)
       }
     }
     lazy val ggRecallSnapshot: Button = Button("Recall") {
       ggSnapshots.selection.indices.headOption.foreach { row =>
-        val sit           = mSnapshots(row).situation
-        ggText.text       = sit.text
-        textUpdated()
-        cfgView.cell()    = sit.config
-        v.forceParameters = sit.forceParameters
-        mkForcePanel()  // XXX TODO - not cool
+        val sit = mSnapshots(row).situation
+        setSituation(sit)
       }
     }
 
@@ -159,22 +165,23 @@ object Text {
       accelerator = Some(KeyStroke.getKeyStroke("ctrl shift S"))
 
       def apply(): Unit = {
-        val dir       = file("render")
-        require(dir.isDirectory)
-        val cfg       = VideoSettings()
-        cfg.baseFile  = dir / "frame"
-        cfg.anim      = mSnapshots.toVector
-        cfg.numFrames = cfg.anim.last.frame + 0 /* XXX TODO -- tail */
-        cfg.baseFile
+        val anim: Anim  = mSnapshots.toVector
+        val initName    = anim.hashCode().toHexString
+        FileDialog.save(init = Some(userHome / s"text_$initName.png")).show(None).foreach { f =>
+          val pMovie    = AutoView(MovieConfig())
+          val optMovie  = OptionPane.confirmation(message = pMovie.component,
+            optionType = OptionPane.Options.OkCancel)
+          if (optMovie.show(title = "Image Sequence Settings") == OptionPane.Result.Ok) {
+            val json      = Anim.format.writes(anim).toString()
+            val jsonOut   = new FileOutputStream(f.replaceExt("json"))
+            jsonOut.write(json.getBytes("UTF-8"))
+            jsonOut.close()
 
-        val p         = v.saveFrameSeriesAsPNG(cfg)
-        // seriesProc    = Some(p)
-        p.addListener {
-          case prog @ Processor.Progress(_, _) => // onEDT(ggProgress.value = prog.toInt)
-          case Processor.Result(_, Success(_)) => println("Done.")
-          case Processor.Result(_, Failure(ex)) =>
-            println("Move rendering failed.")
-            ex.printStackTrace()
+            val MovieConfig(duration, fps) = pMovie.value
+            val numFrames = (duration * fps + 0.5).toInt
+            val pFull     = renderImageSequence(v, anim, numFrames, f)
+            mkProgressDialog("Exporting...", pFull, pFull)
+          }
         }
       }
     })
@@ -246,6 +253,16 @@ object Text {
               fin.read(arr)
               fin.close()
               val jsn = Json.parse(new String(arr, "UTF-8"))
+              jsn match {
+                case _: JsArray =>
+                  val anim = Anim.format.reads(jsn).get
+                  mSnapshots.clear()
+                  mSnapshots.appendAll(anim)
+
+                case _ =>
+                  val sit = Situation.format.reads(jsn).get
+                  setSituation(sit)
+              }
             }
           }
         })
@@ -254,7 +271,7 @@ object Text {
           accelerator = Some(KeyStroke.getKeyStroke("ctrl S"))
           def apply(): Unit = {
             val sit = mkSituation()
-            FileDialog.save(init = Some(userHome / s"collat_${sit.hashCode.toHexString}.png")).show(None).foreach { f =>
+            FileDialog.save(init = Some(userHome / s"text_${sit.hashCode.toHexString}.png")).show(None).foreach { f =>
               val pFull = renderImage(v, sit, f = f.replaceExt("png"))
               val futTail = pFull.map { _ =>
                 val json = Situation.format.writes(sit).toString()
@@ -324,4 +341,7 @@ object Text {
       progress = 1.0
     }
   }
+
+  def renderImageSequence(v: text.Visual, anim: Anim, numFrames: Int, f: File): Processor[Unit] =
+    v.saveFrameSeriesAsPNG(baseFile = f, numFrames = numFrames, anim = anim)
 }

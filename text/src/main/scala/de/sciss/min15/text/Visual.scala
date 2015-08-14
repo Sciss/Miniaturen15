@@ -699,10 +699,10 @@ object Visual {
       blocking(Await.result(p.future, Duration.Inf)) //  Duration(20, TimeUnit.SECONDS)))
     }
 
-    def saveFrameSeriesAsPNG(settings: VideoSettings): Processor[Unit] = {
+    def saveFrameSeriesAsPNG(baseFile: File, numFrames: Int, anim: Anim): Processor[Unit] = {
       import ExecutionContext.Implicits.global
 
-      import settings.{baseFile, numFrames, anim}
+      // import settings.{baseFile, numFrames, anim}
       // def toFrames(sec: Double) = (sec * framesPerSecond + 0.5).toInt
 
       runAnimation    = false
@@ -722,7 +722,7 @@ object Visual {
         var frame = 0
 
         // def mkF() = parent / f"$child${frame - framesSkip}%05d.png"
-        def mkF() = parent / f"$child${frame - framesSkip}%d.png"
+        def mkF() = parent / f"$child-${frame - framesSkip}%d.png"
 
         var stopAnim  = startAnim
         var animIdx   = 0
@@ -800,7 +800,7 @@ object Visual {
             if (animIdx < anim.size) stopAnim = anim(animIdx)
           }
 
-          println(s"frame $frame")
+          // println(s"frame $frame")
           p.progress = frame.toDouble / numFrames
           p.checkAborted()
         }
@@ -812,7 +812,7 @@ object Visual {
         val m = wordVec.scramble().flatMap(_.letters)
         println(s"VERTICES AT END: ${m.size}")
 
-        val lastSit = settings.anim.last.situation
+        val lastSit = anim.last.situation
 
         // println(s"FRAMES-PLOP $framesPlop")
         @tailrec def loopPlop(sq: Vec[VisualVertex]): Unit = sq match {
@@ -878,7 +878,8 @@ trait Visual {
 
   def saveFrameAsPNG(file: File, width: Int, height: Int): Unit
 
-  def saveFrameSeriesAsPNG(settings: VideoSettings): Processor[Unit]
+  // def saveFrameSeriesAsPNG(settings: VideoSettings): Processor[Unit]
+  def saveFrameSeriesAsPNG(baseFile: File, numFrames: Int, anim: Anim): Processor[Unit]
 
   var forceParameters: Map[String, Map[String, Float]]
 
