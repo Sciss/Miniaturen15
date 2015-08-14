@@ -47,10 +47,6 @@ import scala.util.control.NonFatal
 object Visual {
   val DEBUG = false
 
-  // val VIDEO_WIDTH     = 720
-  private val VIDEO_HEIGHT    = 2160 // 1920 // / 3 // 576
-  private val VIDEO_WIDTH_SQR = 2160 // 1080 // / 3 // 1024 // 1024 : 576 = 16 : 9
-
   private lazy val _initFont: Font = {
     // val is  = new FileInputStream("dosis/Dosis-Medium.ttf")
     val is  = getClass.getClassLoader.getResourceAsStream("vesper_libre/VesperLibre-Regular.ttf")
@@ -96,7 +92,7 @@ object Visual {
     extends Visual /* with ComponentHolder[Component] */ {
 
     private[this] var _vis: Visualization       = _
-    private[this] var _dsp: Display             = _
+    private[this] var _dsp: MyDisplay           = _
     private[this] var _g  : PGraph              = _
     private[this] var _vg : VisualGraph         = _
     private[this] var _lay: MyForceDirectedLayout = _
@@ -382,7 +378,7 @@ object Visual {
 
     def guiInit(): Unit = {
       _vis = new Visualization
-      _dsp = new Display(_vis) {
+      _dsp = new MyDisplay(_vis) {
         override def setRenderingHints(g: Graphics2D): Unit = {
           super.setRenderingHints(g)
           g.setRenderingHint(RenderingHints.KEY_STROKE_CONTROL,
@@ -406,7 +402,7 @@ object Visual {
             }
             img = threshOp.filter(img, img3)
           }
-          g.drawImage(img, 0, 0, null)
+          g.drawImage(img, 0, 0, getWidth, getHeight, null)
         }
       }
 
@@ -512,9 +508,6 @@ object Visual {
       actionAutoZoom = new AutoZoom(this)
 
       // initialize the display
-      _dsp.setSize(VIDEO_WIDTH_SQR, VIDEO_HEIGHT)
-      _dsp.setMinimumSize(new Dimension(VIDEO_WIDTH_SQR, VIDEO_HEIGHT))
-      _dsp.setMaximumSize(new Dimension(VIDEO_WIDTH_SQR, VIDEO_HEIGHT))
       _dsp.addControlListener(new ZoomControl     ())
       _dsp.addControlListener(new WheelZoomControl())
       _dsp.addControlListener(new PanControl        )
@@ -542,6 +535,21 @@ object Visual {
       // _vis.run(ACTION_COLOR)
 
       component = Component.wrap(p)
+    }
+
+    def displaySize: Dimension = _dsp.getSize
+
+    def displaySize_=(value: Dimension): Unit = {
+      _dsp.setSize(value)
+      _dsp.setMinimumSize(value)
+      _dsp.setMaximumSize(value)
+    }
+
+    def imageSize: Dimension = new Dimension(_dsp.bufWidth, _dsp.bufHeight)
+
+    def imageSize_=(value: Dimension): Unit = {
+      _dsp.bufWidth   = value.width
+      _dsp.bufHeight  = value.height
     }
 
     var component: Component = _
@@ -598,12 +606,17 @@ object Visual {
       val bImg  = new BufferedImage(width, height, BufferedImage.TYPE_INT_RGB)
       val g     = bImg.createGraphics()
       // val scale = width.toDouble / VIDEO_WIDTH_SQR
-      val p0 = new Point(0, 0)
+      // val p0 = new Point(0, 0)
       try {
         _dsp.damageReport() // force complete redrawing
         // _dsp.zoom(p0, scale)
         // actionAutoZoom.karlHeinz = scale
-        _dsp.paintDisplay(g, new Dimension(width, height))
+        val dw = _dsp.getWidth
+        val dh = _dsp.getHeight
+        val sx = width .toDouble / dw
+        val sy = height.toDouble / dh
+        g.scale(sx, sy)
+        _dsp.paintDisplay(g, new Dimension(dh, dw))
         // _dsp.zoom(p0, 1.0/scale)
         // actionAutoZoom.karlHeinz = 1.0
         ImageIO.write(bImg, "png", file)
@@ -801,4 +814,7 @@ trait Visual {
   var lineWidth : Int
 
   def setSeed(n: Long): Unit
+
+  var displaySize: Dimension
+  var imageSize  : Dimension
 }

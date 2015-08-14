@@ -32,7 +32,7 @@ import scala.collection.breakOut
 import scala.concurrent.blocking
 import scala.swing.Swing._
 import scala.swing.event.ButtonClicked
-import scala.swing.{Action, BorderPanel, BoxPanel, Button, Component, FlowPanel, Frame, Menu, MenuBar, MenuItem, Orientation, ProgressBar, TextArea, ToggleButton}
+import scala.swing.{Swing, Dimension, Action, BorderPanel, BoxPanel, Button, Component, FlowPanel, Frame, Menu, MenuBar, MenuItem, Orientation, ProgressBar, TextArea, ToggleButton}
 import scala.util.{Failure, Success}
 
 object Text {
@@ -65,13 +65,14 @@ object Text {
   def mkFrame(): Unit = {
     val v = text.Visual()
     // v.display.setDoubleBuffered(true)
+    v.displaySize = (640, 640)
 
     val avCfg   = AutoView.Config()
     avCfg.small = true
     val cfg0    = Config(size = 2160, lineWidth = 320, speedLimit = 0.1, noise = 0, threshold = 0, invert = false)
     val cfgView = AutoView(cfg0, avCfg)
 
-    val ggText = new TextArea(12, 40)
+    val ggText = new TextArea(8, 40)
     val clpseText = new Timer(1000, ActionListener { _ =>
       val newText = ggText.text
       if (v.text != newText) v.text = newText
@@ -179,20 +180,25 @@ object Text {
     ggText.minimumSize  = ggText.preferredSize
     ggText.maximumSize  = ggText.preferredSize
 
-    cfgView.cell.addListener { case _ =>
+    def configUpdated(): Unit = {
       val cfg = cfgView.value
       v.lineWidth = cfg.lineWidth
       v.noise     = cfg.noise
       v.threshold = cfg.threshold
+      v.imageSize = new Dimension(cfg.size, cfg.size)
       // cfg.invert
     }
 
-    v.component.preferredSize = (640, 640)
+    cfgView.cell.addListener { case _ => configUpdated() }
+
+    // v.component.preferredSize = (640, 640)
 
     val split = new BorderPanel {
-      add(v.component, BorderPanel.Position.Center)
-      add(pRight, BorderPanel.Position.East  )
+      add(v.component, BorderPanel.Position.North )
+      add(Swing.VGlue, BorderPanel.Position.Center)
+      add(pBottom    , BorderPanel.Position.South )
     }
+
 //    split.oneTouchExpandable  = true
 //    split.continuousLayout    = false
 //    split.dividerLocation     = 800
@@ -241,7 +247,8 @@ object Text {
       title     = "Text"
       contents  = new BorderPanel {
         add(split   , BorderPanel.Position.Center)
-        add(pBottom , BorderPanel.Position.South)
+        // add(pBottom , BorderPanel.Position.South)
+        add(pRight  , BorderPanel.Position.East)
       }
       menuBar = mb
       resizable = false
@@ -262,6 +269,8 @@ object Text {
         }
       }
     }
+
+    configUpdated()
   }
 
   def renderImage(v: text.Visual, sit: Situation, f: File): Processor[Unit] = {
