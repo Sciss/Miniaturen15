@@ -30,7 +30,7 @@ import prefuse.controls.{DragControl, PanControl, WheelZoomControl, ZoomControl}
 import prefuse.data.{Graph => PGraph}
 import prefuse.render.DefaultRendererFactory
 import prefuse.util.ColorLib
-import prefuse.util.force.{DragForce, Force, ForceSimulator, NBodyForce}
+import prefuse.util.force.{DragForce, Force, ForceSimulator}
 import prefuse.visual.expression.InGroupPredicate
 import prefuse.visual.{VisualGraph, VisualItem}
 import prefuse.{Constants, Display, Visualization}
@@ -41,7 +41,7 @@ import scala.collection.immutable.{IndexedSeq => Vec}
 import scala.concurrent.duration.Duration
 import scala.concurrent.{Await, ExecutionContext, Promise, blocking}
 import scala.swing.{Component, Dimension, Graphics2D, Rectangle, Swing}
-import scala.util.Try
+import scala.util.{Random, Try}
 import scala.util.control.NonFatal
 
 object Visual {
@@ -112,6 +112,10 @@ object Visual {
 
     private[this] var _autoZoom = true
 
+    private[this] var rnd     = new Random()
+    private[this] val _nBody  = new MyNBodyForce
+    private[this] val _spring = new MySpringForce
+
     def autoZoom: Boolean = _autoZoom
     def autoZoom_=(value: Boolean): Unit = if (_autoZoom != value) {
       _autoZoom = value
@@ -174,12 +178,16 @@ object Visual {
     }
 
     def text: String = _text
-    def text_=(value: String): Unit = if (_text != value) {
-      visDo {
-        stopAnimation()
-        setText(value)
-        startAnimation()
+    def text_=(value: String): Unit = if (_text != value) visDo {
+      stopAnimation()
+      setText(value)
+      startAnimation()
       }
+
+    def setSeed(n: Long): Unit = {
+      rnd.setSeed(n)
+      _nBody .setSeed(rnd.nextLong())
+      _spring.setSeed(rnd.nextLong())
     }
 
     private val noiseOp = new NoiseFilter
@@ -416,9 +424,10 @@ object Visual {
       _vis.setRendererFactory(rf)
 
       _lay = new MyForceDirectedLayout(this)
+
       val sim = new ForceSimulator
-      sim.addForce(new NBodyForce)
-      sim.addForce(new MySpringForce)
+      sim.addForce(_nBody)
+      sim.addForce(_spring)
       sim.addForce(new DragForce)
       _lay.setForceSimulator(sim)
       forces = sim.getForces.map { f => (f.getClass.getSimpleName, f) } (breakOut)
@@ -790,4 +799,6 @@ trait Visual {
   var noise     : Int
   var threshold : Int
   var lineWidth : Int
+
+  def setSeed(n: Long): Unit
 }
