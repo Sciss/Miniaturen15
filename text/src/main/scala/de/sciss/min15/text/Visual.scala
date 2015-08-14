@@ -729,15 +729,23 @@ object Visual {
 
           def mix(a: Situation, b: Situation, w2: Double): Situation = {
             val w1              = 1.0 - w2
-            val text            = if (w2 < 1) a.text else b.text
-            val size            = (a.config.size * w1 + b.config.size + 0.5).toInt
+            val text            = if (w2 < 1) a.text             else b.text
             val lineWidth       = if (w2 < 1) a.config.lineWidth else b.config.lineWidth
+            val size            = (a.config.size      * w1 + b.config.size       * w2 + 0.5).toInt
             val speedLimit      = a.config.speedLimit * w1 + b.config.speedLimit * w2
-            val noise           = (a.config.noise * w1 + b.config.noise * w2 + 0.5).toInt
-            val threshold       = (a.config.threshold * w1 + b.config.threshold * w2 + 0.5).toInt
+            val noise           = (a.config.noise     * w1 + b.config.noise      * w2 + 0.5).toInt
+            val threshold       = (a.config.threshold * w1 + b.config.threshold  * w2 + 0.5).toInt
             val config          = Config(size = size, lineWidth = lineWidth, speedLimit = speedLimit,
               noise = noise, threshold = threshold)
-            val forceParameters = ???
+            val forceParameters = a.forceParameters.map { case (key, map1) =>
+              val map2 = b.forceParameters.getOrElse(key, map1)
+              val newValues = map1.map { case (key2, v1) =>
+                val v2 = map2.getOrElse(key2, v1)
+                val vMix = v1 * w1 + v2 * w2
+                (key2, vMix.toFloat)
+              }
+              (key, newValues)
+            }
             Situation(config = config, forceParameters = forceParameters, text = text)
           }
 
@@ -753,16 +761,11 @@ object Visual {
             forceSimulator.setSpeedLimit(thisSit.config.speedLimit.toFloat)
             forceSimulator.getForces.foreach { force =>
               val fName = force.getClass.getSimpleName
+              val map   = thisSit.forceParameters.getOrElse(fName, Map.empty)
               // println(s"----FORCE----$fName")
               for (i <- 0 until force.getParameterCount) {
                 val pName = force.getParameterName(i)
-                val startValOpt = startAnim.situation.forceParameters.getOrElse(fName, Map.empty).get(pName)
-                val stopValOpt  = stopAnim .situation.forceParameters.getOrElse(fName, Map.empty).get(pName)
-
-                val valOpt: Option[Float] = (startValOpt, stopValOpt) match {
-                  case (Some(startVal), Some(stopVal)) => Some(startVal * (1 - animFrac) + stopVal * animFrac)
-                  case _ => startValOpt orElse stopValOpt
-                }
+                val valOpt: Option[Float] = map.get(pName)
                 valOpt.foreach { value =>
                   if (force.getParameter(i) != value) {
                     if (DEBUG) println(s"$fName - $pName - $value")
