@@ -112,8 +112,8 @@ object Visual {
 
     private[this] var _autoZoom = true
 
-    private[this] var rnd     = new Random()
-    private[this] val _nBody  = new MyNBodyForce
+    private[this] val rnd     = new Random()
+    private[this] val _nBody  = new NBodyForce
     private[this] val _spring = new MySpringForce
 
     def autoZoom: Boolean = _autoZoom

@@ -8,15 +8,31 @@ import scala.util.Random
 /** Basically a Scala translation of the original Prefuse code,
   * plus adjustable RNG seed.
   */
-object MyNBodyForce {
+object NBodyForce {
   private val pNames: Array[String] = Array[String]("GravitationalConstant", "Distance", "BarnesHutTheta")
 
   final val GRAVITATIONAL_CONST = 0
   final val MIN_DISTANCE        = 1
   final val BARNES_HUT_THETA    = 2
+
+  final val DEFAULT_GRAV_CONSTANT     = -1.0f
+  final val DEFAULT_MIN_GRAV_CONSTANT = -10f
+  final val DEFAULT_MAX_GRAV_CONSTANT = +10f
+
+  final val DEFAULT_DISTANCE          = -1f
+  final val DEFAULT_MIN_DISTANCE      = -1f
+  final val DEFAULT_MAX_DISTANCE      = 500f
+
+  final val DEFAULT_THETA             = 0.9f
+  final val DEFAULT_MIN_THETA         = 0.0f
+  final val DEFAULT_MAX_THETA         = 1.0f
 }
-class MyNBodyForce extends AbstractForce {
-  import MyNBodyForce._
+class NBodyForce(gravConstant : Float = NBodyForce.DEFAULT_GRAV_CONSTANT,
+                 minDistance  : Float = NBodyForce.DEFAULT_DISTANCE,
+                 theta        : Float = NBodyForce.DEFAULT_THETA)
+  extends AbstractForce {
+
+  import NBodyForce._
 
   private val rand  = new Random(12345678L)
   private var root  = factory.getQuadTreeNode
@@ -24,6 +40,10 @@ class MyNBodyForce extends AbstractForce {
   private var xMax  = 0f
   private var yMin  = 0f
   private var yMax  = 0f
+
+  params    = Array[Float](gravConstant, minDistance, theta)
+  minValues = Array[Float](DEFAULT_MIN_GRAV_CONSTANT, DEFAULT_MIN_DISTANCE, DEFAULT_MIN_THETA)
+  maxValues = Array[Float](DEFAULT_MAX_GRAV_CONSTANT, DEFAULT_MAX_DISTANCE, DEFAULT_MAX_THETA)
 
   def setSeed(n: Long): Unit = rand.setSeed(n)
 
