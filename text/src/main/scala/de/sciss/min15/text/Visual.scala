@@ -728,8 +728,17 @@ object Visual {
           import numbers.Implicits._
 
           def mix(a: Situation, b: Situation, w2: Double): Situation = {
-            val w1 = 1.0 - w2
-            ???
+            val w1              = 1.0 - w2
+            val text            = if (w2 < 1) a.text else b.text
+            val size            = (a.config.size * w1 + b.config.size + 0.5).toInt
+            val lineWidth       = if (w2 < 1) a.config.lineWidth else b.config.lineWidth
+            val speedLimit      = a.config.speedLimit * w1 + b.config.speedLimit * w2
+            val noise           = (a.config.noise * w1 + b.config.noise * w2 + 0.5).toInt
+            val threshold       = (a.config.threshold * w1 + b.config.threshold * w2 + 0.5).toInt
+            val config          = Config(size = size, lineWidth = lineWidth, speedLimit = speedLimit,
+              noise = noise, threshold = threshold)
+            val forceParameters = ???
+            Situation(config = config, forceParameters = forceParameters, text = text)
           }
 
           val animFrac = frame.clip(startAnim.frame, stopAnim.frame)
@@ -737,6 +746,11 @@ object Visual {
           val thisSit = mix(startAnim.situation, stopAnim.situation, animFrac)
 
           execOnEDT {
+            noise       = thisSit.config.noise
+            threshold   = thisSit.config.threshold
+            lineWidth   = thisSit.config.lineWidth
+            text        = thisSit.text
+            forceSimulator.setSpeedLimit(thisSit.config.speedLimit.toFloat)
             forceSimulator.getForces.foreach { force =>
               val fName = force.getClass.getSimpleName
               // println(s"----FORCE----$fName")

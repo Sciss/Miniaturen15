@@ -121,8 +121,7 @@ object Text {
           val cfg       = VideoSettings()
           cfg.baseFile  = dir / "frame"
           cfg.anim      = ??? // textObj.anim
-          cfg.text      = ??? // textObj.text
-          cfg.numFrames = cfg.anim.last.frame + cfg.framesPerSecond * (??? : Int) /* textObj.tail */ // 120
+          cfg.numFrames = cfg.anim.last.frame + (??? : Int) /* textObj.tail */ // 120
           cfg.baseFile
 
           val p         = v.saveFrameSeriesAsPNG(cfg)
