@@ -606,6 +606,22 @@ object Visual {
       (name, values)
     }
 
+    def forceParameters_=(params: Map[String, Map[String, Float]]): Unit =
+      forceSimulator.getForces.foreach { force =>
+        val fName = force.getClass.getSimpleName
+        val map   = params.getOrElse(fName, Map.empty)
+        for (i <- 0 until force.getParameterCount) {
+          val pName = force.getParameterName(i)
+          val valOpt: Option[Float] = map.get(pName)
+          valOpt.foreach { value =>
+            if (force.getParameter(i) != value) {
+              if (DEBUG) println(s"$fName - $pName - $value")
+              force.setParameter(i, value)
+            }
+          }
+        }
+      }
+
     def layoutCounter: Int = _lay.counter
 
     def runAnimation: Boolean = _runAnim
@@ -759,21 +775,7 @@ object Visual {
             lineWidth   = thisSit.config.lineWidth
             text        = thisSit.text
             forceSimulator.setSpeedLimit(thisSit.config.speedLimit.toFloat)
-            forceSimulator.getForces.foreach { force =>
-              val fName = force.getClass.getSimpleName
-              val map   = thisSit.forceParameters.getOrElse(fName, Map.empty)
-              // println(s"----FORCE----$fName")
-              for (i <- 0 until force.getParameterCount) {
-                val pName = force.getParameterName(i)
-                val valOpt: Option[Float] = map.get(pName)
-                valOpt.foreach { value =>
-                  if (force.getParameter(i) != value) {
-                    if (DEBUG) println(s"$fName - $pName - $value")
-                    force.setParameter(i, value)
-                  }
-                }
-              }
-            }
+            forceParameters = thisSit.forceParameters
           }
 
           val frameSave = frame - framesSkip
@@ -878,7 +880,7 @@ trait Visual {
 
   def saveFrameSeriesAsPNG(settings: VideoSettings): Processor[Unit]
 
-  def forceParameters: Map[String, Map[String, Float]]
+  var forceParameters: Map[String, Map[String, Float]]
 
   def layoutCounter: Int
 

@@ -27,12 +27,16 @@ package object text {
   object Situation {
     implicit val format: Format[Situation] = AutoFormat[Situation]
   }
-  case class Situation(config: Config, forceParameters: Map[String, Map[String, Float]], text: String)
+  case class Situation(config: Config, forceParameters: Map[String, Map[String, Float]], text: String) {
+    override def toString = s"[$config, $forceParameters, $text]"
+  }
 
   object KeyFrame {
     implicit val format: Format[KeyFrame] = AutoFormat[KeyFrame]
   }
-  case class KeyFrame(frame: Int, situation: Situation) // forceParameters: Map[String, Map[String, Float]])
+  case class KeyFrame(frame: Int, situation: Situation) {
+    override def toString = s"$frame: $situation"
+  }
 
   // type Anim = Vec[(Int, Map[String, Map[String, Float]])]
   type Anim = Vec[KeyFrame]
