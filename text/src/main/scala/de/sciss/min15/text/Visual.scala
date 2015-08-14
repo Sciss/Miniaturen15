@@ -222,9 +222,21 @@ object Visual {
       } .map(_.mkString).toVector
       // val lines: Vec[Vec[String]] = words1.grouped(5).toVector
 
+      var oldMap = wordMap.map {
+        case (key, list) =>
+          val pointsList = list.map { word =>
+            word.letters.map { vv =>
+              val pNode = vv.pNode
+              val vi = _vis.getVisualItem(GROUP_GRAPH, pNode)
+              (vi.getX, vi.getY)
+            }
+          }
+          (key, pointsList)
+      }
+
       wordVec.foreach(_.dispose())
-      wordMap   = Map.empty
-      wordVec   = Vector.empty
+      wordMap = Map.empty
+      wordVec = Vector.empty
 
 //      import scala.collection.JavaConversions._
 //      val foo = _vis.visibleItems().toVector
@@ -234,9 +246,37 @@ object Visual {
 
       val lineRef0 = new AnyRef
 
+      // not very sophisticated
+      def similarity(a: String, b: String): Int =
+        (a zip b).count { case (ac, bc) => Character.toLowerCase(ac) == Character.toLowerCase(bc) }
+
       val ws = words.map { word =>
         val wordRef = new AnyRef
-        val vs      = word.map { c => VisualVertex(this, lineRef = lineRef0, wordRef = wordRef, character = c) }
+        val vs      = word.map { c =>
+          val vv = VisualVertex(this, lineRef = lineRef0, wordRef = wordRef, character = c)
+          vv
+        }
+        // try to assign existing positions
+        if (oldMap.nonEmpty) {
+          val (key, pointsList) = oldMap.maxBy { case (w2, _) =>
+            similarity(word, w2)
+          }
+          val (positions :: tail) = pointsList
+          if (tail.isEmpty) oldMap -= key else oldMap += key -> tail
+
+          // println(s"FOR NEW WORD $word - BEST MATCH IS $key")
+
+          (vs zip positions.padTo(vs.length, positions.last)).foreach { case (vv, (x, y)) =>
+            val vi = _vis.getVisualItem(GROUP_NODES, vv.pNode)
+            vi.setX(x)
+            vi.setY(y)
+            vi.setStartX(x)
+            vi.setStartY(y)
+            vi.setEndX(x)
+            vi.setEndY(y)
+          }
+        }
+
         vs.foreachPair { (pred, succ) =>
           graph.addEdge(pred.pNode, succ.pNode)
         }
