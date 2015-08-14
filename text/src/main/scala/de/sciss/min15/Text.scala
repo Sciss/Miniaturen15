@@ -69,13 +69,18 @@ object Text {
 
     val avCfg   = AutoView.Config()
     avCfg.small = true
-    val cfg0    = Config(size = 2160, lineWidth = 320, speedLimit = 0.1, noise = 0, threshold = 0, invert = false)
+    val cfg0    = Config(size = 2160, lineWidth = 160 /* 320 */, speedLimit = 0.1, noise = 0, threshold = 0, invert = false)
     val cfgView = AutoView(cfg0, avCfg)
 
     val ggText = new TextArea(8, 40)
-    val clpseText = new Timer(1000, ActionListener { _ =>
+
+    def textUpdated(): Unit = {
       val newText = ggText.text
       if (v.text != newText) v.text = newText
+    }
+
+    val clpseText = new Timer(1000, ActionListener { _ =>
+      textUpdated()
     })
     clpseText.setRepeats(false)
 
@@ -101,7 +106,7 @@ object Text {
       }
     }
 
-    val ggRunAnim = new ToggleButton("Run Animation") {
+    val ggRunAnim = new ToggleButton("Anim") {
       listenTo(this)
       reactions += {
         case ButtonClicked(_) =>
@@ -129,38 +134,40 @@ object Text {
 
     var seriesProc = Option.empty[Processor[Unit]]
 
-    val ggProgress = new ProgressBar
+    // val ggProgress = new ProgressBar
 
-    val ggSaveFrameSeries = Button("Save Movie...") {
-      seriesProc.fold[Unit] {
-        val dir       = file("render")
-        require(dir.isDirectory)
-        val cfg       = VideoSettings()
-        cfg.baseFile  = dir / "frame"
-        cfg.anim      = ??? // textObj.anim
-        cfg.text      = ??? // textObj.text
-        cfg.numFrames = cfg.anim.last.frame + cfg.framesPerSecond * (??? : Int) /* textObj.tail */ // 120
-        cfg.baseFile
+    val miExportSequence = new MenuItem(new Action("Export Image Sequence...") {
+      accelerator = Some(KeyStroke.getKeyStroke("ctrl shift S"))
 
-        val p         = v.saveFrameSeriesAsPNG(cfg)
-        seriesProc    = Some(p)
-        p.addListener {
-          case prog @ Processor.Progress(_, _) => onEDT(ggProgress.value = prog.toInt)
-          case Processor.Result(_, Success(_)) => println("Done.")
-          case Processor.Result(_, Failure(ex)) =>
-            println("Move rendering failed.")
-            ex.printStackTrace()
+      def apply(): Unit =
+        seriesProc.fold[Unit] {
+          val dir       = file("render")
+          require(dir.isDirectory)
+          val cfg       = VideoSettings()
+          cfg.baseFile  = dir / "frame"
+          cfg.anim      = ??? // textObj.anim
+          cfg.text      = ??? // textObj.text
+          cfg.numFrames = cfg.anim.last.frame + cfg.framesPerSecond * (??? : Int) /* textObj.tail */ // 120
+          cfg.baseFile
+
+          val p         = v.saveFrameSeriesAsPNG(cfg)
+          seriesProc    = Some(p)
+          p.addListener {
+            case prog @ Processor.Progress(_, _) => // onEDT(ggProgress.value = prog.toInt)
+            case Processor.Result(_, Success(_)) => println("Done.")
+            case Processor.Result(_, Failure(ex)) =>
+              println("Move rendering failed.")
+              ex.printStackTrace()
+          }
+
+        } { p =>
+          p.abort()
+          seriesProc = None
         }
-
-      } { p =>
-        p.abort()
-        seriesProc = None
-      }
-    }
+    })
 
     val pBottom = new BoxPanel(Orientation.Vertical) {
-      contents += new FlowPanel(ggAutoZoom, ggRunAnim, ggStepAnim)
-      contents += new FlowPanel(ggSaveFrameSeries, ggParamSnap, ggProgress)
+      contents += new FlowPanel(ggAutoZoom, ggRunAnim, ggParamSnap)
     }
     val fSim    = v.forceSimulator
     val fPanel  = new JForcePanel(fSim)
@@ -240,6 +247,8 @@ object Text {
             }
           }
         })
+
+        contents += miExportSequence
       }
     }
 
@@ -271,6 +280,9 @@ object Text {
     }
 
     configUpdated()
+    v.display.panAbs(320, 320)
+    ggText.text = "But words are still the principal instruments of control"
+    textUpdated()
   }
 
   def renderImage(v: text.Visual, sit: Situation, f: File): Processor[Unit] = {

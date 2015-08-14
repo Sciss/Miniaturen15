@@ -54,10 +54,15 @@ object VisualVertex {
 
     def init(): Unit = {
       _pNode = mkPNode()
+      // println(s"ADD NODE ${_pNode.hashCode().toHexString} - $character")
     }
 
     def dispose(): Unit = {
-      if (_pNode.isValid) main.graph.removeNode(_pNode)
+      if (_pNode.isValid) {
+        // println(s"REMOVE NODE ${_pNode.hashCode().toHexString} - $character")
+        main.graph.removeNode(_pNode)
+      }
+      // else println(s"NOT VALID: ${_pNode.hashCode().toHexString}")
     }
 
     init()

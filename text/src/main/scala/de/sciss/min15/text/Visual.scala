@@ -101,7 +101,7 @@ object Visual {
     private[this] var _runAnim = false
 
     private[this] var _text = ""
-    private[this] var wordMap  = Map.empty[String, Word]
+    private[this] var wordMap  = Map.empty[String, List[Word]]
     private[this] var wordVec = Vec.empty[Word]
 
     private[this] var forces: Map[String, Force] = _
@@ -174,11 +174,7 @@ object Visual {
     }
 
     def text: String = _text
-    def text_=(value: String): Unit = if (_text != value) visDo {
-      stopAnimation()
-      setText(value)
-      startAnimation()
-      }
+    def text_=(value: String): Unit = if (_text != value) setText1(value)
 
     def setSeed(n: Long): Unit = {
       rnd.setSeed(n)
@@ -206,8 +202,15 @@ object Visual {
     def lineWidth: Int = _lineWidth
     def lineWidth_=(value: Int): Unit = if (_lineWidth != value) {
       _lineWidth = value
-      setText(_text)
+      setText1(_text)
     }
+
+    private def setText1(value: String) =
+      visDo {
+        stopAnimation()
+        setText(value)
+        startAnimation()
+      }
 
     private def setText(value: String): Unit = {
       _text = value
@@ -219,12 +222,14 @@ object Visual {
       } .map(_.mkString).toVector
       // val lines: Vec[Vec[String]] = words1.grouped(5).toVector
 
-      wordMap.foreach { case (word, v) =>
-        v.dispose()
-      }
+      wordVec.foreach(_.dispose())
       wordMap   = Map.empty
       wordVec   = Vector.empty
 
+//      import scala.collection.JavaConversions._
+//      val foo = _vis.visibleItems().toVector
+//      require(foo.isEmpty, foo.mkString(", "))
+//
       import kollflitz.Ops._
 
       val lineRef0 = new AnyRef
@@ -236,7 +241,7 @@ object Visual {
           graph.addEdge(pred.pNode, succ.pNode)
         }
         val w  = new Word(vs, word)
-        wordMap += word -> w
+        wordMap += word -> (w :: wordMap.getOrElse(word, Nil))
         wordVec :+= w
         w
       }
