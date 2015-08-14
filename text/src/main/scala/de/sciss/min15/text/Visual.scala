@@ -16,11 +16,11 @@ package de.sciss.min15.text
 
 import java.awt.geom.AffineTransform
 import java.awt.image.BufferedImage
-import java.awt.{Graphics, Color, Font, LayoutManager, Point, RenderingHints}
+import java.awt.{Color, Font, Graphics, LayoutManager, RenderingHints}
 import javax.imageio.ImageIO
 import javax.swing.JPanel
 
-import com.jhlabs.image.{ThresholdFilter, NoiseFilter}
+import com.jhlabs.image.{DiffuseFilter, ThresholdFilter}
 import de.sciss.file._
 import de.sciss.processor.Processor
 import de.sciss.{kollflitz, numbers}
@@ -42,8 +42,8 @@ import scala.collection.immutable.{IndexedSeq => Vec}
 import scala.concurrent.duration.Duration
 import scala.concurrent.{Await, ExecutionContext, Promise, blocking}
 import scala.swing.{Component, Dimension, Graphics2D, Rectangle, Swing}
-import scala.util.{Random, Try}
 import scala.util.control.NonFatal
+import scala.util.{Random, Try}
 
 object Visual {
   val DEBUG = false
@@ -183,16 +183,21 @@ object Visual {
       _spring.setSeed(rnd.nextLong())
     }
 
-    private val noiseOp = new NoiseFilter
-    noiseOp.setAmount(0)
-    noiseOp.setMonochrome(true)
+//    private val noiseOp = new NoiseFilter
+//    noiseOp.setAmount(0)
+//    noiseOp.setMonochrome(true)
+//    def noise: Int = noiseOp.getAmount
+//    def noise_=(value: Int): Unit = noiseOp.setAmount(value)
+
+    private val noiseOp = new DiffuseFilter
+    noiseOp.setScale(0)
 
     private val threshOp = new ThresholdFilter(0)
 
     private var _lineWidth = 320
 
-    def noise: Int = noiseOp.getAmount
-    def noise_=(value: Int): Unit = noiseOp.setAmount(value)
+    def noise: Int = (noiseOp.getScale * 4 + 0.5).toInt // .getAmount
+    def noise_=(value: Int): Unit = noiseOp.setScale(value * 0.25f)
 
     def threshold: Int = threshOp.getLowerThreshold
     def threshold_=(value: Int): Unit = {
@@ -813,7 +818,7 @@ object Visual {
         implicit val rnd = new util.Random(0L)
         // val m0  = (wordMap.values.flatMap(_.letters)(breakOut): Vec[VisualVertex]).scramble()
         val m = wordVec.scramble().flatMap(_.letters)
-        println(s"VERTICES AT END: ${m.size}")
+        // println(s"VERTICES AT END: ${m.size}")
 
         val lastSit = anim.last.situation
 
