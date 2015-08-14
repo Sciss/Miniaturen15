@@ -18,10 +18,21 @@ import de.sciss.play.json.AutoFormat
 import play.api.libs.json.Format
 
 package object text {
+  object Config {
+    implicit val format: Format[Config] = AutoFormat[Config]
+  }
+  case class Config(size: Int, lineWidth: Int,
+                    speedLimit: Double, noise: Int, threshold: Int)
+
+  object Situation {
+    implicit val format: Format[Situation] = AutoFormat[Situation]
+  }
+  case class Situation(config: Config, forceParameters: Map[String, Map[String, Float]], text: String)
+
   object KeyFrame {
     implicit val format: Format[KeyFrame] = AutoFormat[KeyFrame]
   }
-  case class KeyFrame(frame: Int, forceParameters: Map[String, Map[String, Float]])
+  case class KeyFrame(frame: Int, situation: Situation) // forceParameters: Map[String, Map[String, Float]])
 
   // type Anim = Vec[(Int, Map[String, Map[String, Float]])]
   type Anim = Vec[KeyFrame]

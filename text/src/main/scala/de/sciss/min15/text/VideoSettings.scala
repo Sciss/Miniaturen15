@@ -23,13 +23,10 @@ object VideoSettings {
 
   implicit def build(b: Builder): VideoSettings = {
     import b._
-    Impl(baseFile = baseFile, width = width, height = height,
-      numFrames = numFrames, framesPerSecond = framesPerSecond,
-      speedLimit = speedLimit, text = text, anim = anim)
+    Impl(baseFile = baseFile, numFrames = numFrames, anim = anim)
   }
 
-  private final case class Impl(baseFile: File, width: Int, height: Int, numFrames: Int, framesPerSecond: Int,
-                                speedLimit: Double, text: String, anim: Anim)
+  private final case class Impl(baseFile: File, numFrames: Int, anim: Anim)
     extends VideoSettings {
 
     override def productPrefix = "VideoSetting"
@@ -44,23 +41,12 @@ object VideoSettings {
 
     def baseFile_=(value: File): Unit = _baseFile = value
 
-    var width               = 2160 // 1080 // 1920
-    var height              = 2160 // 1920 // 1080
     var numFrames           = 10000
-    var framesPerSecond     = 25
-    var speedLimit          = 0.1
-    var text                = "Foo Bar"
     var anim                = Vector.empty: Anim
   }
 }
 trait VideoSettings {
   def baseFile            : File
-  def width               : Int
-  def height              : Int
   def numFrames           : Int
-  def framesPerSecond     : Int
-  // def plopDur             : Double
-  def speedLimit          : Double
-  def text                : String
   def anim                : Anim
 }

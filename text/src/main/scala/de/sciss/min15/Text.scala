@@ -21,46 +21,21 @@ import javax.swing.{KeyStroke, Timer}
 import de.sciss.desktop.FileDialog
 import de.sciss.file._
 import de.sciss.guiflitz.AutoView
-import de.sciss.min15.text.VideoSettings
-import de.sciss.play.json.AutoFormat
+import de.sciss.min15.text.{Config, Situation, VideoSettings}
 import de.sciss.processor.Processor
 import de.sciss.processor.impl.ProcessorImpl
-import play.api.libs.json.{Format, Json}
+import play.api.libs.json.Json
 import prefuse.util.ui.JForcePanel
 
 import scala.collection.breakOut
 import scala.concurrent.blocking
 import scala.swing.Swing._
 import scala.swing.event.ButtonClicked
-import scala.swing.{Swing, Dimension, Action, BorderPanel, BoxPanel, Button, Component, FlowPanel, Frame, Menu, MenuBar, MenuItem, Orientation, ProgressBar, TextArea, ToggleButton}
+import scala.swing.{Action, BorderPanel, BoxPanel, Button, Component, Dimension, FlowPanel, Frame, Menu, MenuBar, MenuItem, Orientation, Swing, TextArea, ToggleButton}
 import scala.util.{Failure, Success}
 
 object Text {
   def main(args: Array[String]): Unit = runGUI(mkFrame())
-
-  object Config {
-    implicit val format: Format[Config] = AutoFormat[Config]
-  }
-  case class Config(size: Int, lineWidth: Int,
-                    speedLimit: Double, noise: Int, threshold: Int, invert: Boolean) {
-    def toVideoSettings: VideoSettings = {
-      val b             = VideoSettings()
-      b.width           = size
-      b.height          = size
-      b.speedLimit      = speedLimit
-      b.baseFile        = ???
-      b.anim            = ???
-      b.framesPerSecond = ???
-      b.numFrames       = ???
-      b.text            = ???
-      b
-    }
-  }
-
-  object Situation {
-    implicit val format: Format[Situation] = AutoFormat[Situation]
-  }
-  case class Situation(config: Config, forceParameters: Map[String, Map[String, Float]], text: String)
 
   def mkFrame(): Unit = {
     val v = text.Visual()
@@ -69,7 +44,7 @@ object Text {
 
     val avCfg   = AutoView.Config()
     avCfg.small = true
-    val cfg0    = Config(size = 2160, lineWidth = 160 /* 320 */, speedLimit = 0.1, noise = 0, threshold = 0, invert = false)
+    val cfg0    = Config(size = 2160, lineWidth = 160 /* 320 */, speedLimit = 0.1, noise = 0, threshold = 0)
     val cfgView = AutoView(cfg0, avCfg)
 
     val ggText = new TextArea(8, 40)

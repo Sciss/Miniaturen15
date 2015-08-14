@@ -661,7 +661,9 @@ object Visual {
         val sx = width .toDouble / dw
         val sy = height.toDouble / dh
         g.scale(sx, sy)
-        _dsp.paintDisplay(g, new Dimension(dh, dw))
+        // _dsp.paintDisplay(g, new Dimension(dh, dw))
+        _dsp.paintComponent(g)
+
         // _dsp.zoom(p0, 1.0/scale)
         // actionAutoZoom.karlHeinz = 1.0
         ImageIO.write(bImg, "png", file)
@@ -682,17 +684,19 @@ object Visual {
     }
 
     def saveFrameSeriesAsPNG(settings: VideoSettings): Processor[Unit] = {
-      import settings.{text => _, _}
-
       import ExecutionContext.Implicits.global
 
+      import settings.{baseFile, numFrames, anim}
       // def toFrames(sec: Double) = (sec * framesPerSecond + 0.5).toInt
 
       runAnimation    = false
       val child       = baseFile.base
       val parent      = baseFile.parent
 
-      forceSimulator.setSpeedLimit(speedLimit.toFloat)
+      var startAnim   = anim.head
+      val startSit    = startAnim.situation
+
+      forceSimulator.setSpeedLimit(startSit.config.speedLimit.toFloat)
 
       var initialized = false
 
@@ -704,7 +708,6 @@ object Visual {
         // def mkF() = parent / f"$child${frame - framesSkip}%05d.png"
         def mkF() = parent / f"$child${frame - framesSkip}%d.png"
 
-        var startAnim = anim.head
         var stopAnim  = startAnim
         var animIdx   = 0
 
@@ -713,17 +716,25 @@ object Visual {
 
           } else {
             execOnEDT {
-              display.panAbs(settings.width * 0.5, settings.height * 0.5)
+              val center = startSit.config.size
+              display.panAbs(center, center)
               display.zoomAbs(new Point(0, 0), 0.1)
-              setText(settings.text)
+              setText(startSit.text)
               animationStep()
             }
             initialized = true
           }
 
           import numbers.Implicits._
+
+          def mix(a: Situation, b: Situation, w2: Double): Situation = {
+            val w1 = 1.0 - w2
+            ???
+          }
+
           val animFrac = frame.clip(startAnim.frame, stopAnim.frame)
             .linlin(startAnim.frame, math.max(startAnim.frame + 1, stopAnim.frame), 0, 1)
+          val thisSit = mix(startAnim.situation, stopAnim.situation, animFrac)
 
           execOnEDT {
             forceSimulator.getForces.foreach { force =>
@@ -731,8 +742,8 @@ object Visual {
               // println(s"----FORCE----$fName")
               for (i <- 0 until force.getParameterCount) {
                 val pName = force.getParameterName(i)
-                val startValOpt = startAnim.forceParameters.getOrElse(fName, Map.empty).get(pName)
-                val stopValOpt  = stopAnim .forceParameters.getOrElse(fName, Map.empty).get(pName)
+                val startValOpt = startAnim.situation.forceParameters.getOrElse(fName, Map.empty).get(pName)
+                val stopValOpt  = stopAnim .situation.forceParameters.getOrElse(fName, Map.empty).get(pName)
 
                 val valOpt: Option[Float] = (startValOpt, stopValOpt) match {
                   case (Some(startVal), Some(stopVal)) => Some(startVal * (1 - animFrac) + stopVal * animFrac)
@@ -752,7 +763,7 @@ object Visual {
           if (frameSave >= 0) {
             val f = mkF()
             execOnEDT {
-              saveFrameAsPNG(f, width = width, height = height)
+              saveFrameAsPNG(f, width = thisSit.config.size, height = thisSit.config.size)
               // _dsp.damageReport() // force complete redrawing
               // _dsp.paintDisplay(g, new Dimension(width, height))
               // ImageIO.write(bImg, "png", f)
@@ -782,6 +793,8 @@ object Visual {
         val m = wordVec.scramble().flatMap(_.letters)
         println(s"VERTICES AT END: ${m.size}")
 
+        val lastSit = settings.anim.last.situation
+
         // println(s"FRAMES-PLOP $framesPlop")
         @tailrec def loopPlop(sq: Vec[VisualVertex]): Unit = sq match {
           case head +: tail =>
@@ -792,7 +805,7 @@ object Visual {
               } catch {
                 case NonFatal(e) => e.printStackTrace()
               }
-              saveFrameAsPNG(f, width = width, height = height)
+              saveFrameAsPNG(f, width = lastSit.config.size, height = lastSit.config.size)
               animationStep()
             }
             frame += 1
