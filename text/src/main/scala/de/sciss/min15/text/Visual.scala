@@ -14,6 +14,7 @@
 
 package de.sciss.min15.text
 
+import java.awt.geom.AffineTransform
 import java.awt.image.BufferedImage
 import java.awt.{Graphics, Color, Font, LayoutManager, Point, RenderingHints}
 import javax.imageio.ImageIO
@@ -713,6 +714,7 @@ object Visual {
       val startSit    = startAnim.situation
 
       forceSimulator.setSpeedLimit(startSit.config.speedLimit.toFloat)
+      setSeed(anim.hashCode())  // bueno...
 
       var initialized = false
 
@@ -722,7 +724,7 @@ object Visual {
         var frame = 0
 
         // def mkF() = parent / f"$child${frame - framesSkip}%05d.png"
-        def mkF() = parent / f"$child-${frame - framesSkip}%d.png"
+        def mkF() = parent / f"$child-${frame - framesSkip + 1}%d.png"
 
         var stopAnim  = startAnim
         var animIdx   = 0
@@ -732,9 +734,10 @@ object Visual {
 
           } else {
             execOnEDT {
-              val center = startSit.config.size
-              display.panAbs(center, center)
-              display.zoomAbs(new Point(0, 0), 0.1)
+              // val center = startSit.config.size * 0.5
+              display.setTransform(AffineTransform.getTranslateInstance(0, 0))
+              display.panAbs(display.getWidth * 0.5, display.getHeight * 0.5)
+              // display.zoomAbs(new Point(0, 0), 0.1)
               setText(startSit.text)
               animationStep()
             }

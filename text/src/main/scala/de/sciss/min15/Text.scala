@@ -318,6 +318,7 @@ object Text {
     }
 
     configUpdated()
+    // println(s"INITIAL = ${v.display.getTransform}")
     v.display.panAbs(320, 320)
     ggText.text = "But words are still the principal instruments of control"
     textUpdated()
