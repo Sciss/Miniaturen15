@@ -111,3 +111,24 @@ Note the limitation on the number of frames (`-vframes`)
     avconv -i 'lyapunov_vid/image_out/lya_e224f03c-%d.png' -vcodec libxvid -r 25 -q 100 -pass 1 \
     -vf "scale=1080:1080,fade=type=in:start_frame=0:nb_frames=8,fade=type=out:start_frame=1525:nb_frames=25" \
     -vframes 1550 -aspect 1:1 -vb 6M -threads 0 -f mp4 videos/lya_e224f03c.mp4
+
+# Text
+
+## Text 1ff54f0f
+
+    avconv -i 'text_vid/image_out/text_1ff54f0f-%d.png' -vcodec libxvid -r 25 -q 100 -pass 1 \
+    -vf "scale=1080:1080,fade=type=in:start_frame=0:nb_frames=12" \
+    -vframes 1550 -aspect 1:1 -vb 6M -threads 0 -f mp4 videos/text_1ff54f0f.mp4
+
+## Text 50982b9
+
+    avconv -i 'text_vid/image_out/text_50982b9-%d.png' -vcodec libxvid -r 25 -q 100 -pass 1 \
+    -vf "scale=1080:1080,fade=type=in:start_frame=0:nb_frames=12,fade=type=out:start_frame=1525:nb_frames=25" \
+    -vframes 1550 -aspect 1:1 -vb 6M -threads 0 -f mp4 videos/text_50982b9.mp4
+
+## Text 589db7b0
+
+    avconv -i 'text_vid/image_out/text_589db7b0-%d.png' -vcodec libxvid -r 25 -q 100 -pass 1 \
+    -vf "scale=1080:1080,fade=type=in:start_frame=0:nb_frames=12,fade=type=out:start_frame=1525:nb_frames=25" \
+    -vframes 1550 -aspect 1:1 -vb 6M -threads 0 -f mp4 videos/text_589db7b0.mp4
+
