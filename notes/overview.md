@@ -44,6 +44,14 @@ Assemble video:
     -vf "scale=1080:1080,fade=type=in:start_frame=0:nb_frames=12,fade=type=out:start_frame=1525:nb_frames=25" \
     -aspect 1:1 -vb 6M -threads 0 -f mp4 videos/collat_521f9faf.mp4
 
+**Output new:**
+
+cf. https://trac.ffmpeg.org/wiki/Encode/H.264
+
+    avconv -i 'collateral_vid/image_out/collat_521f9faf-%d.png' -c:v libx264 -r 25 -preset veryslow -crf 22 \
+    -s:v 1080x1080 -vf "fade=type=in:start_frame=0:nb_frames=12,fade=type=out:start_frame=1525:nb_frames=25" \
+    -aspect 1:1 -bufsize 62400K -maxrate 62400K -f mp4 videos/prothese_521f9faf.mp4
+
 ## Collateral 7a510609
 
 Prepare input frames:
@@ -69,6 +77,12 @@ Assemble video:
     avconv -i 'collateral_vid/image_out/collat_b3a70216-%d.png' -vcodec libxvid -r 25 -q 100 -pass 2 \
     -vf "scale=1080:1080,fade=type=in:start_frame=0:nb_frames=12,fade=type=out:start_frame=1525:nb_frames=25" \
     -vframes 1550 -aspect 1:1 -vb 6M -threads 0 -f mp4 videos/collat_b3a70216.mp4
+
+**Output new:**
+
+    avconv -i 'collateral_vid/image_out/collat_b3a70216-%d.png' -c:v libx264 -r 25 -preset slow -crf 22 \
+    -s:v 1080x1080 -vf "fade=type=in:start_frame=0:nb_frames=12,fade=type=out:start_frame=1525:nb_frames=25" \
+    -vframes 1550 -aspect 1:1 -bufsize 62400K -maxrate 62400K -f mp4 videos/prothese_b3a70216.mp4
 
 # Trunk
 
