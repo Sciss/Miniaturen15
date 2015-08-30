@@ -9,8 +9,9 @@ object AssembleLya1de991d8 extends App {
   val dirTmp  = file("lyapunov_vid") / "tmp"
   val dirOut  = file("videos")
   dirTmp.mkdir()
-  val prefix  = "lya_1de991d8"
-  val fileOut = dirOut / s"$prefix.mp4"
+  val hash    = "1de991d8"
+  val prefix  = s"lya_$hash"
+  val fileOut = dirOut / s"phase_$hash.mp4"
 
   if (dirTmp.children.isEmpty) {
     def mkIn (frame: Int) = dirIn  / s"$prefix-$frame.png"
@@ -35,14 +36,14 @@ object AssembleLya1de991d8 extends App {
 
   if (!fileOut.exists) Seq("avconv",
     "-i", (dirTmp / s"$prefix-%d.png").path,
-    "-vcodec", "libxvid",
+    "-c:v", "libx264",
     "-r", "25",
-    "-q", "100",
-    "-pass", "1",
-    "-vf", "scale=1080:1080",
+    "-preset", "veryslow",
+    "-crf", "22",
+    "-s:v", "1080x1080",
     "-aspect", "1:1",
-    "-vb", "6M",
-    "-threads", "0",
+    "-bufsize", "8000K",
+    "-maxrate", "60000K",
     "-f", "mp4",
     fileOut.path).!
 }

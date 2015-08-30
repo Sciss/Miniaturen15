@@ -11,8 +11,9 @@ object AssembleCollat7a510609 extends App {
   val dirTmp  = file("collateral_vid") / "tmp"
   val dirOut  = file("videos")
   dirTmp.mkdir()
-  val prefix  = "collat_7a510609"
-  val fileOut = dirOut / s"$prefix.mp4"
+  val hash    = "7a510609"
+  val prefix  = s"collat_$hash"
+  val fileOut = dirOut / s"prothese_$hash.mp4"
 
   if (dirTmp.children.isEmpty) {
     def mkIn (frame: Int) = dirIn  / s"$prefix-$frame.png"
@@ -32,14 +33,15 @@ object AssembleCollat7a510609 extends App {
 
   if (!fileOut.exists) Seq("avconv",
     "-i", (dirTmp / s"$prefix-%d.png").path,
-    "-vcodec", "libxvid",
+    "-c:v", "libx264",
     "-r", "25",
-    "-q", "100",
-    "-pass", "2", // "1",
-    "-vf", "scale=1080:1080,fade=type=in:start_frame=0:nb_frames=12",
+    "-preset", "veryslow",
+    "-crf", "22",
+    "-s:v", "1080x1080",
+    "-vf", "fade=type=in:start_frame=0:nb_frames=12",
     "-aspect", "1:1",
-    "-vb", "6M",
-    "-threads", "0",
+    "-bufsize", "8000K",
+    "-maxrate", "60000K",
     "-f", "mp4",
     fileOut.path).!
 }
