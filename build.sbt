@@ -1,6 +1,6 @@
 lazy val baseName         = "Miniaturen15"
 lazy val baseNameL        = baseName.toLowerCase
-lazy val projectVersion   = "0.1.0-SNAPSHOT"
+lazy val projectVersion   = "0.1.0"
 
 lazy val commonSettings = Seq(
   version             := projectVersion,
