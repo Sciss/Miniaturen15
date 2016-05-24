@@ -1,13 +1,13 @@
 lazy val baseName         = "Miniaturen15"
 lazy val baseNameL        = baseName.toLowerCase
-lazy val projectVersion   = "0.1.0"
+lazy val projectVersion   = "0.1.1-SNAPSHOT"
 
 lazy val commonSettings = Seq(
   version             := projectVersion,
   organization        := "de.sciss",
   description         := "Series of music pieces",
   homepage            := Some(url(s"https://github.com/Sciss/$baseName")),
-  scalaVersion        := "2.11.7",
+  scalaVersion        := "2.11.8",
   licenses            := Seq(cc_by_nc_nd),
   scalacOptions      ++= Seq("-deprecation", "-unchecked", "-feature", "-encoding", "utf8", "-Xfuture"),
   resolvers += Resolver.typesafeRepo("releases"),
@@ -16,8 +16,8 @@ lazy val commonSettings = Seq(
     "de.sciss"        %% "numbers"            % "0.1.1",
     "de.sciss"        %% "processor"          % "0.4.0",
     "com.mortennobel" % "java-image-scaling"  % "0.8.6",  // includes jh filters
-    "de.sciss"        %% "audiowidgets-swing" % "1.9.1",
-    "de.sciss"        %% "desktop"            % "0.7.1",
+    "de.sciss"        %% "audiowidgets-swing" % "1.9.4",
+    "de.sciss"        %% "desktop"            % "0.7.2",
     "de.sciss"        %% "guiflitz"           % "0.5.0",
     "de.sciss"        %% "play-json-sealed"   % "0.2.0",
     "de.sciss"        %% "scissdsp"           % "1.2.2",
