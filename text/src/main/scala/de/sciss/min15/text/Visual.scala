@@ -17,9 +17,13 @@ package de.sciss.min15.text
 import java.awt.geom.AffineTransform
 import java.awt.image.BufferedImage
 import java.awt.{Color, Font, Graphics, LayoutManager, RenderingHints}
+import java.io.{File, FileOutputStream}
 import javax.imageio.ImageIO
 import javax.swing.JPanel
 
+import com.itextpdf.awt.PdfGraphics2D
+import com.itextpdf.text.pdf.PdfWriter
+import com.itextpdf.text.{Document => IDocument, Rectangle => IRectangle}
 import com.jhlabs.image.{DiffuseFilter, ThresholdFilter}
 import de.sciss.file._
 import de.sciss.processor.Processor
@@ -704,6 +708,46 @@ object Visual {
       }
     }
 
+    def saveFrameAsPDF(file: File, width: Int, height: Int, dpi: Double): Unit = {
+      val scale     = 72.0 / dpi
+      val widthU    = width  * scale // 'user units'
+      val heightH   = height * scale // 'user units'
+      val pageSize  = new IRectangle(0, 0, widthU.toFloat, heightH.toFloat)
+      val margin    = 0
+      val doc       = new IDocument(pageSize, margin, margin, margin, margin)
+      val stream    = new FileOutputStream(file)
+      val writer    = PdfWriter.getInstance(doc, stream)
+
+      doc.open()
+      try {
+        val cb = writer.getDirectContent
+        val tp = cb.createTemplate(width, height)
+        // use `onlyShapes = true` until we deal with the font-mapper!
+        val g = new PdfGraphics2D(tp, width, height, true /*, fontMapper */)
+        g.setRenderingHint(RenderingHints.KEY_FRACTIONALMETRICS, RenderingHints.VALUE_FRACTIONALMETRICS_ON)
+        try {
+//          _dsp.damageReport() // force complete redrawing
+          val dw = _dsp.getWidth
+          val dh = _dsp.getHeight
+          val sx = width .toDouble / dw
+          val sy = height.toDouble / dh
+          g.scale(sx, sy)
+          // _dsp.paintDisplay(g, new Dimension(dh, dw))
+//          _dsp.paintComponent(g)
+
+          _dsp.damageReport() // force complete redrawing
+          _dsp.paintDisplay(g, new Dimension(width, height))
+          // view.render(g)
+        } finally {
+          g.dispose()
+        }
+        // tp.setHorizontalScaling((scale * 100).toFloat)
+        cb.addTemplate(tp, margin, margin)
+      } finally {
+        doc.close()
+      }
+    }
+
     private def execOnEDT[A](code: => A)(implicit exec: ExecutionContext): A = {
       val p = Promise[A]()
       Swing.onEDT {
@@ -906,6 +950,8 @@ trait Visual {
   def saveFrameAsPNG(file: File): Unit
 
   def saveFrameAsPNG(file: File, width: Int, height: Int): Unit
+
+  def saveFrameAsPDF(file: File, width: Int, height: Int, dpi: Double = 300): Unit
 
   // def saveFrameSeriesAsPNG(settings: VideoSettings): Processor[Unit]
   def saveFrameSeriesAsPNG(baseFile: File, numFrames: Int, anim: Anim): Processor[Unit]

@@ -271,8 +271,8 @@ object Text {
           accelerator = Some(KeyStroke.getKeyStroke("ctrl S"))
           def apply(): Unit = {
             val sit = mkSituation()
-            FileDialog.save(init = Some(userHome / s"text_${sit.hashCode.toHexString}.png")).show(None).foreach { f =>
-              val pFull = renderImage(v, sit, f = f.replaceExt("png"))
+            FileDialog.save(init = Some(userHome / s"text_${sit.hashCode.toHexString}.pdf")).show(None).foreach { f =>
+              val pFull = renderImage(v, sit, f = f.replaceExt("pdf"))
               val futTail = pFull.map { _ =>
                 val json = Situation.format.writes(sit).toString()
                 blocking {
@@ -320,7 +320,14 @@ object Text {
     configUpdated()
     // println(s"INITIAL = ${v.display.getTransform}")
     v.display.panAbs(320, 320)
-    ggText.text = "But words are still the principal instruments of control"
+    ggText.text =
+      "Beschleunigen und Abbremsen haben keine fest stehende Bedeutung. " +
+      "Frequenzen überlagern sich zu bewegten oder stehenden Wellen, wie " +
+      "der Eindruck der Speichen eines sich drehenden Rades auf Zelluloid " +
+      "oder dem Strahl des Videobildes. Dieses Resonanzverhalten liegt auch " +
+      "der Leichtigkeit zugrunde, mit welcher ein Traum Epochen überspringt " +
+      "oder überlagert, und dem Zusammentreffen aller unserer Eigenzeitlichkeiten " +
+      "im angenommenen Hier und Jetzt."
     textUpdated()
   }
 
@@ -334,10 +341,10 @@ object Text {
     extends ProcessorImpl[Unit, Processor[Unit]] with Processor[Unit] {
 
     protected def body(): Unit = blocking {
-      val fOut  = f.replaceExt("png")
+      val fOut  = f.replaceExt("pdf")
       if (!fOut.exists()) {
         // val vs = sit.config.toVideoSettings
-        v.saveFrameAsPNG(f, width = sit.config.size /* vs.width */, height = sit.config.size)
+        v.saveFrameAsPDF(f, width = sit.config.size /* vs.width */, height = sit.config.size)
       }
       progress = 1.0
     }

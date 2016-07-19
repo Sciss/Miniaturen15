@@ -8,7 +8,8 @@ lazy val commonSettings = Seq(
   description         := "Series of music pieces",
   homepage            := Some(url(s"https://github.com/Sciss/$baseName")),
   scalaVersion        := "2.11.8",
-  licenses            := Seq(cc_by_nc_nd),
+  // FOR THIS BRANCH:
+  licenses            := Seq(gpl3), // Seq(cc_by_nc_nd),
   scalacOptions      ++= Seq("-deprecation", "-unchecked", "-feature", "-encoding", "utf8", "-Xfuture"),
   resolvers += Resolver.typesafeRepo("releases"),
   libraryDependencies ++= Seq(
@@ -21,11 +22,14 @@ lazy val commonSettings = Seq(
     "de.sciss"        %% "guiflitz"           % "0.5.0",
     "de.sciss"        %% "play-json-sealed"   % "0.2.0",
     "de.sciss"        %% "scissdsp"           % "1.2.2",
-    "de.sciss"        %% "kollflitz"          % "0.2.0"
+    "de.sciss"        %% "kollflitz"          % "0.2.0",
+    "de.sciss"        %% "pdflitz"            % "1.2.1"
   )
 )
 
 lazy val cc_by_nc_nd = "CC BY-NC-ND 4.0" -> url("http://creativecommons.org/licenses/by-nc-nd/4.0/legalcode")
+
+lazy val gpl3 = "GPL v3+" -> url("http://www.gnu.org/licenses/gpl-3.0.txt")
 
 lazy val root = Project(id = baseNameL, base = file("."))
   .aggregate(common, lyapunov, collateral, trunks)
