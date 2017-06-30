@@ -33,7 +33,7 @@ import de.sciss.processor.Processor
 import de.sciss.processor.impl.ProcessorImpl
 import de.sciss.swingplus.CloseOperation
 import de.sciss.swingplus.Implicits._
-import play.api.libs.json.Format
+import play.api.libs.json.{Format, JsArray, JsObject, Json}
 
 import scala.concurrent.blocking
 import scala.swing.Swing._
@@ -360,22 +360,25 @@ object Trunks {
               val arr = new Array[Byte](fin.available())
               fin.read(arr)
               fin.close()
-//              val jsn = Json.parse(new String(arr, "UTF-8"))
-//              jsn match {
-//                case _: JsArray => // video setting tuple
-//                  import Situation.format2
+              val jsn = Json.parse(new String(arr, "UTF-8"))
+              jsn match {
+                case JsArray(Seq(sitAJsn, sitBJsn)) => // video setting tuple
+                  import Situation.format2
+                  val sitAv = Json.fromJson[Situation](sitAJsn).get
+                  val sitBv = Json.fromJson[Situation](sitBJsn).get
 //                  val (sitAv, sitBv) = Json.fromJson[(Situation, Situation)](jsn).get
-//                  sitA.situation = sitAv
-//                  sitB.situation = sitBv
-//
-//                case _: JsObject => // individual setting
-//                  val res = Json.fromJson[Situation](jsn).get
+                  sitA.situation = sitAv
+                  sitB.situation = sitBv
+
+                case _: JsObject => // individual setting
+                  val res = Json.fromJson[Situation](jsn).get
+                  ???
 //                  lyaCfgView .cell() = res.lya
 //                  colrCfgView.cell() = res.color
-//
-//                case _ =>
-//                  sys.error(s"Not an array or object: $jsn")
-//              }
+
+                case _ =>
+                  sys.error(s"Not an array or object: $jsn")
+              }
             }
           }
         })
@@ -552,7 +555,8 @@ object Trunks {
     extends ProcessorImpl[BufferedImage, Processor[BufferedImage]] with Processor[BufferedImage] {
 
     def body(): BufferedImage = blocking {
-      val fIn     = file("trunks_vid") / "image_in" / s"trunk${source.id}t.png"
+      // val fIn     = file("trunks_vid") / "image_in" / s"trunk${source.id}t.png"
+      val fIn = file(s"/data/projects/Imperfect/TrunksMaerz09/trunk${source.id}t2.png")
       if (!fIn.isFile) throw new FileNotFoundException(fIn.path)
       val imgIn   = ImageIO.read(fIn)
 //      val imgOut  = cropImage(imgIn, trimLeft, trimTop,
