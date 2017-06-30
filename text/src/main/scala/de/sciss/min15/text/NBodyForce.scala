@@ -1,3 +1,17 @@
+/*
+ * NBodyForce.scala
+ * (Miniaturen 15)
+ *
+ * Copyright (c) 2015-2017 Hanns Holger Rutz. All rights reserved.
+ *
+ * This software and music is published under the
+ * Creative Commons Attribution-NonCommercial-NoDerivatives 4.0 International License
+ * (CC BY-NC-ND 4.0)
+ *
+ * For further information, please contact Hanns Holger Rutz at
+ * contact@sciss.de
+ */
+
 package de.sciss.min15.text
 
 import prefuse.util.force.{AbstractForce, ForceItem, ForceSimulator}
@@ -11,21 +25,21 @@ import scala.util.Random
 object NBodyForce {
   private val pNames: Array[String] = Array[String]("GravitationalConstant", "Distance", "BarnesHutTheta")
 
-  final val GRAVITATIONAL_CONST = 0
-  final val MIN_DISTANCE        = 1
-  final val BARNES_HUT_THETA    = 2
+  final val GRAVITATIONAL_CONST       : Int   = 0
+  final val MIN_DISTANCE              : Int   = 1
+  final val BARNES_HUT_THETA          : Int   = 2
 
-  final val DEFAULT_GRAV_CONSTANT     = -1.0f
-  final val DEFAULT_MIN_GRAV_CONSTANT = -10f
-  final val DEFAULT_MAX_GRAV_CONSTANT = +10f
+  final val DEFAULT_GRAV_CONSTANT     : Float = -1.0f
+  final val DEFAULT_MIN_GRAV_CONSTANT : Float = -10f
+  final val DEFAULT_MAX_GRAV_CONSTANT : Float = +10f
 
-  final val DEFAULT_DISTANCE          = -1f
-  final val DEFAULT_MIN_DISTANCE      = -1f
-  final val DEFAULT_MAX_DISTANCE      = 500f
+  final val DEFAULT_DISTANCE          : Float = -1f
+  final val DEFAULT_MIN_DISTANCE      : Float = -1f
+  final val DEFAULT_MAX_DISTANCE      : Float = 500f
 
-  final val DEFAULT_THETA             = 0.9f
-  final val DEFAULT_MIN_THETA         = 0.0f
-  final val DEFAULT_MAX_THETA         = 1.0f
+  final val DEFAULT_THETA             : Float = 0.9f
+  final val DEFAULT_MIN_THETA         : Float = 0.0f
+  final val DEFAULT_MAX_THETA         : Float = 1.0f
 }
 class NBodyForce(gravConstant : Float = NBodyForce.DEFAULT_GRAV_CONSTANT,
                  minDistance  : Float = NBodyForce.DEFAULT_DISTANCE,
@@ -260,7 +274,7 @@ class NBodyForce(gravConstant : Float = NBodyForce.DEFAULT_GRAV_CONSTANT,
     var hasChildren : Boolean             = false
     var mass        : Float               = 0f
     var com         : Array[Float]        = new Array[Float](2)
-    var value       : ForceItem           = null
+    var value       : ForceItem           = _
     var children    : Array[QuadTreeNode] = new Array[QuadTreeNode](4)
   }
 

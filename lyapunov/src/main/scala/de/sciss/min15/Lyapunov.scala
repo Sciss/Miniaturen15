@@ -2,7 +2,7 @@
  * Lyapunov.scala
  * (Miniaturen 15)
  *
- * Copyright (c) 2015 Hanns Holger Rutz. All rights reserved.
+ * Copyright (c) 2015-2017 Hanns Holger Rutz. All rights reserved.
  *
  * This software and music is published under the
  * Creative Commons Attribution-NonCommercial-NoDerivatives 4.0 International License
@@ -154,7 +154,7 @@ object Lyapunov {
         }
         // val futGroup = Future.sequence(pGroup)
         // XXX TODO --- we need Processor.sequence
-        pGroup.zipWithIndex.foreach { case (p, i) =>
+        pGroup.zipWithIndex.foreach { case (p, _) =>
           await(p, progress, fWeight)
         }
         progress = (groupIdx + 1).toDouble / numClumps
@@ -219,14 +219,14 @@ object Lyapunov {
       Situation(lyaCfgView.value, colrCfgView.value)
 
     class SituationView(name: String) {
-      var situation = mkSituation()
+      var situation: Situation = mkSituation()
 
-      val ggSave = Button(s"> $name") {
+      val ggSave: Button = Button(s"> $name") {
         situation = mkSituation()
       }
       ggSave.tooltip = s"Store Settings $name"
 
-      val ggLoad = Button(s"< $name") {
+      val ggLoad: Button = Button(s"< $name") {
         lyaCfgView .cell() = situation.lya
         colrCfgView.cell() = situation.color
       }
@@ -317,7 +317,7 @@ object Lyapunov {
           crossHair = true
           setMouse(m)
           repaint()
-        case m: MouseExited  =>
+        case _: MouseExited  =>
           crossHair = false
           tooltip = null
           repaint()
@@ -348,7 +348,7 @@ object Lyapunov {
             setCell(v1, v2)
           }
 
-        case m: MouseReleased =>
+        case _: MouseReleased =>
           if (isPressed) {
             if (isDragging) {
               val v1  = mouseToVirtual(mPress.point)
@@ -577,7 +577,7 @@ object Lyapunov {
   def stringToSeq(s: String): Vector[Double] = s.map(c => if (c == 'A') 0.0 else 1.0)(breakOut)
 
   object LyaConfig {
-    implicit val format = AutoFormat[LyaConfig]
+    implicit val format: Format[LyaConfig] = AutoFormat[LyaConfig]
   }
   case class LyaConfig(aMin: Double, aMax: Double, bMin: Double, bMax: Double,
                        seq: String, width: Int, height: Int, N: Int) {
@@ -587,7 +587,7 @@ object Lyapunov {
   }
 
   object ColorConfig {
-    implicit val format = AutoFormat[ColorConfig]
+    implicit val format: Format[ColorConfig] = AutoFormat[ColorConfig]
   }
   case class ColorConfig(min: Double, max: Double, invert: Boolean, noise: Double, thresh: Double)
 

@@ -2,7 +2,7 @@
  * MyEdgeRenderer.scala
  * (Miniaturen 15)
  *
- * Copyright (c) 2015 Hanns Holger Rutz. All rights reserved.
+ * Copyright (c) 2015-2017 Hanns Holger Rutz. All rights reserved.
  *
  * This software and music is published under the
  * Creative Commons Attribution-NonCommercial-NoDerivatives 4.0 International License
@@ -15,12 +15,10 @@
 package de.sciss.min15.text
 
 import java.awt.{Graphics2D, Shape}
-import java.awt.geom.{AffineTransform, Ellipse2D}
 
 import prefuse.Constants
 import prefuse.render.EdgeRenderer
-import prefuse.util.GraphicsLib
-import prefuse.visual.{EdgeItem, VisualItem}
+import prefuse.visual.VisualItem
 
 class MyEdgeRenderer
   extends EdgeRenderer(Constants.EDGE_TYPE_LINE, Constants.EDGE_ARROW_NONE) {

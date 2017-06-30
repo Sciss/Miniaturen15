@@ -2,7 +2,7 @@
  * Trunks.scala
  * (Miniaturen 15)
  *
- * Copyright (c) 2015 Hanns Holger Rutz. All rights reserved.
+ * Copyright (c) 2015-2017 Hanns Holger Rutz. All rights reserved.
  *
  * This software and music is published under the
  * Creative Commons Attribution-NonCommercial-NoDerivatives 4.0 International License
@@ -17,14 +17,14 @@ package de.sciss.min15
 import java.awt.geom.{AffineTransform, Point2D}
 import java.awt.image.BufferedImage
 import java.awt.{Color, Cursor}
-import java.io.{FileOutputStream, FileInputStream, FileNotFoundException}
+import java.io.{FileInputStream, FileNotFoundException, FileOutputStream}
 import javax.imageio.ImageIO
 import javax.swing.KeyStroke
 
-import com.jhlabs.image.{InvertFilter, TransformFilter, NoiseFilter, PolarFilter, ThresholdFilter}
+import com.jhlabs.image.{InvertFilter, NoiseFilter, PolarFilter, ThresholdFilter, TransformFilter}
 import com.mortennobel.imagescaling.ResampleOp
 import de.sciss.audiowidgets.Axis
-import de.sciss.desktop.{OptionPane, FileDialog}
+import de.sciss.desktop.{FileDialog, OptionPane}
 import de.sciss.file._
 import de.sciss.guiflitz.AutoView
 import de.sciss.numbers
@@ -33,12 +33,12 @@ import de.sciss.processor.Processor
 import de.sciss.processor.impl.ProcessorImpl
 import de.sciss.swingplus.CloseOperation
 import de.sciss.swingplus.Implicits._
-import play.api.libs.json.{Format, Json}
+import play.api.libs.json.Format
 
 import scala.concurrent.blocking
 import scala.swing.Swing._
 import scala.swing.event.{ButtonClicked, MouseDragged, MouseEntered, MouseEvent, MouseExited, MouseMoved, MousePressed, MouseReleased}
-import scala.swing.{Button, Action, BorderPanel, BoxPanel, Component, FlowPanel, Frame, Graphics2D, Menu, MenuBar, MenuItem, Orientation, Point, ToggleButton}
+import scala.swing.{Action, BorderPanel, BoxPanel, Button, Component, FlowPanel, Frame, Graphics2D, Menu, MenuBar, MenuItem, Orientation, Point, ToggleButton}
 
 object Trunks {
   def main(args: Array[String]): Unit = runGUI(mkFrame())
@@ -133,14 +133,14 @@ object Trunks {
       Situation(srcCfgView.value, trimCfgView.value, cfgView.value)
 
     class SituationView(name: String) {
-      var situation = mkSituation()
+      var situation: Situation = mkSituation()
 
-      val ggSave = Button(s"> $name") {
+      val ggSave: Button = Button(s"> $name") {
         situation = mkSituation()
       }
       ggSave.tooltip = s"Store Settings $name"
 
-      val ggLoad = Button(s"< $name") {
+      val ggLoad: Button = Button(s"< $name") {
         srcCfgView  .cell() = situation.source
         trimCfgView .cell() = situation.trim
         cfgView     .cell() = situation.config
@@ -209,7 +209,7 @@ object Trunks {
           crossHair = true
           setMouse(m)
           repaint()
-        case m: MouseExited  =>
+        case _: MouseExited  =>
           crossHair = false
           tooltip = null
           repaint()
@@ -238,7 +238,7 @@ object Trunks {
             c()       = c1
           }
 
-        case m: MouseReleased =>
+        case _: MouseReleased =>
           if (isPressed) {
             if (isDragging) {
               val v1  = mouseToVirtual(mPress.point)
@@ -314,7 +314,7 @@ object Trunks {
       procSource.foreach(_.abort())
       val proc    = mkImageIn(srcCfgView.value)
       procSource  = Some(proc)
-      proc.foreach { imgIn =>
+      proc.foreach { _ =>
         onEDT(runTrim())
       }
     }
@@ -360,7 +360,7 @@ object Trunks {
               val arr = new Array[Byte](fin.available())
               fin.read(arr)
               fin.close()
-              val jsn = Json.parse(new String(arr, "UTF-8"))
+//              val jsn = Json.parse(new String(arr, "UTF-8"))
 //              jsn match {
 //                case _: JsArray => // video setting tuple
 //                  import Situation.format2
@@ -534,7 +534,7 @@ object Trunks {
         }
         // val futGroup = Future.sequence(pGroup)
         // XXX TODO --- we need Processor.sequence
-        pGroup.zipWithIndex.foreach { case (p, i) =>
+        pGroup.zipWithIndex.foreach { case (p, _) =>
           await(p, progress, fWeight)
         }
         progress = (groupIdx + 1).toDouble / numClumps
@@ -608,7 +608,7 @@ object Trunks {
       }
       progress = 0.25
       checkAborted()
-      import config.{angleStart, angleSpan, innerRadius}
+      import config.{angleSpan, angleStart, innerRadius}
       // println(f"cx = $cx%1.2f, cy = $cy%1.2f, angleStart = $angleStart%1.1f, angleSpan = $angleSpan%1.1f")
       val polarOp     = new MyPolar(innerRadius = innerRadius,
           angleStart = angleStart, angleSpan = angleSpan, cx = cx, cy = cy,

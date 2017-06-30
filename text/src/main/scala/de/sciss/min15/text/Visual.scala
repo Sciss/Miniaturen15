@@ -2,7 +2,7 @@
  * Visual.scala
  * (Miniaturen 15)
  *
- * Copyright (c) 2015 Hanns Holger Rutz. All rights reserved.
+ * Copyright (c) 2015-2017 Hanns Holger Rutz. All rights reserved.
  *
  * This software and music is published under the
  * Creative Commons Attribution-NonCommercial-NoDerivatives 4.0 International License
@@ -37,7 +37,7 @@ import prefuse.visual.{VisualGraph, VisualItem}
 import prefuse.{Constants, Display, Visualization}
 
 import scala.annotation.tailrec
-import scala.collection.{JavaConversions, breakOut}
+import scala.collection.breakOut
 import scala.collection.immutable.{IndexedSeq => Vec}
 import scala.concurrent.duration.Duration
 import scala.concurrent.{Await, ExecutionContext, Promise, blocking}
@@ -86,7 +86,7 @@ object Visual {
 
   class Word(val letters: Vec[VisualVertex], val word: String) {
     def dispose(): Unit = letters.foreach(_.dispose())
-    lazy val width = letters.map(_.advance).sum   // yes I know this is not precise
+    lazy val width: Int = letters.map(_.advance).sum   // yes I know this is not precise
   }
 
   class Line(val words: Vec[Word])
@@ -753,9 +753,9 @@ object Visual {
               display.setTransform(AffineTransform.getTranslateInstance(0, 0))
               display.panAbs(display.getWidth * 0.5, display.getHeight * 0.5)
               // display.zoomAbs(new Point(0, 0), 0.1)
-              import JavaConversions._
+              import scala.collection.JavaConverters._
               setText(startSit.text)
-              _vis.visibleItems(GROUP_NODES).foreach {
+              _vis.visibleItems(GROUP_NODES).asScala.foreach {
                 case vi: VisualItem =>
                   vi.setX(0)
                   vi.setY(0)
@@ -879,9 +879,9 @@ object Visual {
     def minimumLayoutSize  (parent: java.awt.Container): Dimension = peer.getMinimumSize
     def preferredLayoutSize(parent: java.awt.Container): Dimension = peer.getPreferredSize
 
-    def removeLayoutComponent(comp: java.awt.Component) = ()
+    def removeLayoutComponent(comp: java.awt.Component): Unit = ()
 
-    def addLayoutComponent(name: String, comp: java.awt.Component) = ()
+    def addLayoutComponent(name: String, comp: java.awt.Component): Unit = ()
   }
 }
 trait Visual {

@@ -2,7 +2,7 @@
  * Text.scala
  * (Miniaturen 15)
  *
- * Copyright (c) 2015 Hanns Holger Rutz. All rights reserved.
+ * Copyright (c) 2015-2017 Hanns Holger Rutz. All rights reserved.
  *
  * This software and music is published under the
  * Creative Commons Attribution-NonCommercial-NoDerivatives 4.0 International License
@@ -32,7 +32,7 @@ import scala.collection.mutable
 import scala.concurrent.blocking
 import scala.swing.Swing._
 import scala.swing.event.ButtonClicked
-import scala.swing.{Action, BorderPanel, BoxPanel, Button, Component, Dimension, FlowPanel, Frame, Label, Menu, MenuBar, MenuItem, Orientation, ScrollPane, TextArea, ToggleButton}
+import scala.swing.{Action, BorderPanel, BoxPanel, Button, Component, FlowPanel, Frame, Label, Menu, MenuBar, MenuItem, Orientation, ScrollPane, TextArea, ToggleButton}
 
 object Text {
   def main(args: Array[String]): Unit = runGUI(mkFrame())

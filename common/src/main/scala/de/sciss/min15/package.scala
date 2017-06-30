@@ -1,3 +1,17 @@
+/*
+ * min15.scala
+ * (Miniaturen 15)
+ *
+ * Copyright (c) 2015-2017 Hanns Holger Rutz. All rights reserved.
+ *
+ * This software and music is published under the
+ * Creative Commons Attribution-NonCommercial-NoDerivatives 4.0 International License
+ * (CC BY-NC-ND 4.0)
+ *
+ * For further information, please contact Hanns Holger Rutz at
+ * contact@sciss.de
+ */
+
 package de.sciss
 
 import java.awt.image.BufferedImage
@@ -7,10 +21,11 @@ import de.sciss.desktop.OptionPane
 import de.sciss.processor.Processor
 
 import scala.annotation.tailrec
-import scala.concurrent.{ExecutionContextExecutor, Future, ExecutionContext}
+import scala.concurrent.{ExecutionContext, Future}
 import scala.swing.Swing._
 import scala.swing.event.ButtonClicked
 import scala.swing.{Button, ProgressBar}
+import scala.util.Failure
 import scala.util.control.NonFatal
 
 package object min15 {
@@ -25,7 +40,7 @@ package object min15 {
 
   ///
 
-  def waitForProcessor(p: Processor[Any])(implicit exec: ExecutionContext): Unit = {
+  def waitForProcessor(p: Processor[Any])(implicit executionContext: ExecutionContext): Unit = {
     val sync = new AnyRef
     val t = new Thread {
       override def run(): Unit = {
@@ -35,9 +50,7 @@ package object min15 {
     }
     t.start()
 
-    p.onComplete {
-      case _ => sync.synchronized(sync.notify())
-    }
+    p.onComplete(_ => sync.synchronized(sync.notify()))
   }
 
   def runGUI(block: => Unit): Unit =
@@ -63,9 +76,10 @@ package object min15 {
         p.abort()
     }
     tail.onComplete(_ => onEDT(dlg.dispose()))
-    tail.onFailure {
-      case Processor.Aborted() =>
-      case ex => ex.printStackTrace()
+    tail.onComplete {
+      case Failure(Processor.Aborted()) =>
+      case Failure(ex) => ex.printStackTrace()
+      case _ =>
     }
     p.addListener {
       case prog @ Processor.Progress(_, _) => onEDT(ggProg.value = prog.toInt)
@@ -74,9 +88,10 @@ package object min15 {
   }
 
   def startAndReportProcessor[A](p: Processor[A] with Processor.Prepared): Processor[A] = {
-    p.onFailure {
-      case Processor.Aborted() =>
-      case ex => ex.printStackTrace()
+    p.onComplete {
+      case Failure(Processor.Aborted()) =>
+      case Failure(ex) => ex.printStackTrace()
+      case _ =>
     }
     p.start()
     p
@@ -87,5 +102,5 @@ package object min15 {
   def cropImage(src: BufferedImage, x: Int, y: Int, width: Int, height: Int): BufferedImage =
     src.getSubimage(x, y, width, height)
 
-  implicit val executionContext: ExecutionContextExecutor = ExecutionContext.Implicits.global
+  implicit val executionContext: ExecutionContext = ExecutionContext.Implicits.global
 }

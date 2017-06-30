@@ -1,27 +1,40 @@
-lazy val baseName         = "Miniaturen15"
-lazy val baseNameL        = baseName.toLowerCase
-lazy val projectVersion   = "0.1.1-SNAPSHOT"
+lazy val baseName                = "Miniaturen15"
+lazy val baseNameL               = baseName.toLowerCase
+lazy val projectVersion          = "0.2.0-SNAPSHOT"
+
+lazy val fileUtilVersion         = "1.1.2"
+lazy val numbersVersion          = "0.1.3"
+lazy val processorVersion        = "0.4.1"
+lazy val javaImageScalingVersion = "0.8.6"
+lazy val audioWidgetsVersion     = "1.10.3"
+lazy val desktopVersion          = "0.7.5"
+lazy val guiFlitzVersion         = "0.5.1"
+lazy val playJSONVersion         = "0.4.1"
+lazy val scissDSPVersion         = "1.2.3"
+lazy val kollFlitzVersion        = "0.2.1"
+lazy val intensityPaletteVersion = "1.0.0"
+lazy val prefuseVersion          = "1.0.0"
 
 lazy val commonSettings = Seq(
   version             := projectVersion,
   organization        := "de.sciss",
   description         := "Series of music pieces",
   homepage            := Some(url(s"https://github.com/Sciss/$baseName")),
-  scalaVersion        := "2.11.8",
+  scalaVersion        := "2.12.2",
   licenses            := Seq(cc_by_nc_nd),
   scalacOptions      ++= Seq("-deprecation", "-unchecked", "-feature", "-encoding", "utf8", "-Xfuture"),
   resolvers += Resolver.typesafeRepo("releases"),
   libraryDependencies ++= Seq(
-    "de.sciss"        %% "fileutil"           % "1.1.1",
-    "de.sciss"        %% "numbers"            % "0.1.1",
-    "de.sciss"        %% "processor"          % "0.4.0",
-    "com.mortennobel" % "java-image-scaling"  % "0.8.6",  // includes jh filters
-    "de.sciss"        %% "audiowidgets-swing" % "1.9.4",
-    "de.sciss"        %% "desktop"            % "0.7.2",
-    "de.sciss"        %% "guiflitz"           % "0.5.0",
-    "de.sciss"        %% "play-json-sealed"   % "0.2.0",
-    "de.sciss"        %% "scissdsp"           % "1.2.2",
-    "de.sciss"        %% "kollflitz"          % "0.2.0"
+    "de.sciss"        %% "fileutil"           % fileUtilVersion,
+    "de.sciss"        %% "numbers"            % numbersVersion,
+    "de.sciss"        %% "processor"          % processorVersion,
+    "com.mortennobel" % "java-image-scaling"  % javaImageScalingVersion,  // includes jh filters
+    "de.sciss"        %% "audiowidgets-swing" % audioWidgetsVersion,
+    "de.sciss"        %% "desktop"            % desktopVersion,
+    "de.sciss"        %% "guiflitz"           % guiFlitzVersion,
+    "de.sciss"        %% "play-json-sealed"   % playJSONVersion,
+    "de.sciss"        %% "scissdsp"           % scissDSPVersion,
+    "de.sciss"        %% "kollflitz"          % kollFlitzVersion
   )
 )
 
@@ -47,7 +60,7 @@ lazy val lyapunov = Project(id = s"$baseNameL-lyapunov", base = file("lyapunov")
   .settings(commonSettings)
   .settings(
     libraryDependencies ++= Seq(
-      "de.sciss" %  "intensitypalette"   % "1.0.0"
+      "de.sciss" % "intensitypalette" % intensityPaletteVersion
     )
   )
 
@@ -70,7 +83,7 @@ lazy val text = Project(id = s"$baseNameL-text", base = file("text"))
   .settings(commonSettings)
   .settings(
     libraryDependencies ++= Seq(
-      "de.sciss" % "prefuse-core" % "1.0.0"
+      "de.sciss" % "prefuse-core" % prefuseVersion
     )
   )
 

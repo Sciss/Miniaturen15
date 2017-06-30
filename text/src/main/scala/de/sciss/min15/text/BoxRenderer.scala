@@ -2,7 +2,7 @@
  * BoxRenderer.scala
  * (Miniaturen 15)
  *
- * Copyright (c) 2015 Hanns Holger Rutz. All rights reserved.
+ * Copyright (c) 2015-2017 Hanns Holger Rutz. All rights reserved.
  *
  * This software and music is published under the
  * Creative Commons Attribution-NonCommercial-NoDerivatives 4.0 International License
@@ -14,11 +14,10 @@
 
 package de.sciss.min15.text
 
-import java.awt.geom.{Line2D, Rectangle2D}
-import java.awt.{BasicStroke, FontMetrics, Color, Graphics2D, Shape}
+import java.awt.geom.Rectangle2D
+import java.awt.{Color, FontMetrics, Graphics2D, Shape}
 
-import prefuse.render.{Renderer, AbstractShapeRenderer}
-import prefuse.util.ColorLib
+import prefuse.render.{AbstractShapeRenderer, Renderer}
 import prefuse.visual.VisualItem
 
 object BoxRenderer {
@@ -27,16 +26,16 @@ object BoxRenderer {
 
   def defaultFontMetrics: FontMetrics = Renderer.DEFAULT_GRAPHICS.getFontMetrics(Visual.condensedFont) // (Style.font)
 
-  private final val colrSel     = Color.blue // Style.selectionColor
-  private final val strkColrOk  = ColorLib.getColor(192, 192, 192)
+//  private final val colrSel     = Color.blue // Style.selectionColor
+//  private final val strkColrOk  = ColorLib.getColor(192, 192, 192)
   // private final val strkColrEdit= colrSel
   // private final val strkColrErr = ColorLib.getColor(240,   0,   0)
-  private final val fillColr    = Color.black // Style.boxColor
+//  private final val fillColr    = Color.black // Style.boxColor
   // private final val textColrEdit= strkColrEdit
   private final val textColr    = Color.white // Color.black
-  private final val strkShpOk   = new BasicStroke(1f)
+//  private final val strkShpOk   = new BasicStroke(1f)
   // private final val strkShpPend = new BasicStroke(1f, BasicStroke.CAP_SQUARE, BasicStroke.JOIN_MITER, 10f, Array[Float](6, 4), 0f)
-  private final val portColr    = Color.gray // Style.portColor
+//  private final val portColr    = Color.gray // Style.portColor
 }
 final class BoxRenderer(d: Visual) extends AbstractShapeRenderer {
   import BoxRenderer._

@@ -2,7 +2,7 @@
  * VisualNodeImpl.scala
  * (Miniaturen 15)
  *
- * Copyright (c) 2015 Hanns Holger Rutz. All rights reserved.
+ * Copyright (c) 2015-2017 Hanns Holger Rutz. All rights reserved.
  *
  * This software and music is published under the
  * Creative Commons Attribution-NonCommercial-NoDerivatives 4.0 International License
@@ -46,8 +46,8 @@ object VisualNodeImpl {
   final val gArc          = new Arc2D.Double
   final val gLine         = new Line2D.Double
 
-  final val margin        = diam * 0.2
-  final val margin2       = margin * 2
+  final val margin : Double = diam * 0.2
+  final val margin2: Double = margin * 2
 
   // final val threeDigits   = new MathContext(3, RoundingMode.HALF_UP)
 }
@@ -175,7 +175,7 @@ trait VisualNodeImpl extends VisualNode /* with VisualDataImpl */ {
         // NOTE: the getPixelBounds somehow incorporates wrong zoom factors.
         // The problem with `getVisualBounds` seems to originate from the
         // initial font-render-context.
-        val vvb = if (frc.isTransformed) v.getVisualBounds else v.getPixelBounds(frc, 0f, 0f)
+//        val vvb = if (frc.isTransformed) v.getVisualBounds else v.getPixelBounds(frc, 0f, 0f)
 
         // if (name == "freq") println(s"w = ${vvb.getWidth}, h = ${vvb.getHeight}; t? ${frc.isTransformed}")
 
