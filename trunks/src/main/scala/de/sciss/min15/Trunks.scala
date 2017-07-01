@@ -41,7 +41,19 @@ import scala.swing.event.{ButtonClicked, MouseDragged, MouseEntered, MouseEvent,
 import scala.swing.{Action, BorderPanel, BoxPanel, Button, Component, FlowPanel, Frame, Graphics2D, Menu, MenuBar, MenuItem, Orientation, Point, ToggleButton}
 
 object Trunks {
-  def main(args: Array[String]): Unit = runGUI(mkFrame())
+  case class AppConfig(trunkDir: File = file("trunks"))
+
+  def main(args: Array[String]): Unit = {
+    val default = AppConfig()
+    val p = new scopt.OptionParser[AppConfig]("Miniature15 Trunks") {
+      opt[File]('d', "trunk-dir")
+        .text(s"Base directory for trunks (default: ${default.trunkDir})")
+        .action { (f, c) => c.copy(trunkDir = f) }
+    }
+    p.parse(args, default).fold(sys.exit(1)) { config =>
+      runGUI(mkFrame(config))
+    }
+  }
 
   /*
     Parameters:
@@ -85,7 +97,7 @@ object Trunks {
                     flipX: Boolean, flipY: Boolean,
                     width: Int, height: Int, noise: Int, thresh: Int, invert: Boolean)
 
-  def mkFrame(): Unit = {
+  def mkFrame(appConfig: AppConfig): Unit = {
     val hAxis1  = new Axis(Orientation.Horizontal)
     val vAxis1  = new Axis(Orientation.Vertical  )
     val hAxis2  = new Axis(Orientation.Horizontal)
@@ -312,7 +324,7 @@ object Trunks {
 
     def runSource(): Unit = {
       procSource.foreach(_.abort())
-      val proc    = mkImageIn(srcCfgView.value)
+      val proc    = mkImageIn(srcCfgView.value, appConfig)
       procSource  = Some(proc)
       proc.foreach { _ =>
         onEDT(runTrim())
@@ -363,18 +375,16 @@ object Trunks {
               val jsn = Json.parse(new String(arr, "UTF-8"))
               jsn match {
                 case JsArray(Seq(sitAJsn, sitBJsn)) => // video setting tuple
-                  import Situation.format2
                   val sitAv = Json.fromJson[Situation](sitAJsn).get
                   val sitBv = Json.fromJson[Situation](sitBJsn).get
-//                  val (sitAv, sitBv) = Json.fromJson[(Situation, Situation)](jsn).get
                   sitA.situation = sitAv
                   sitB.situation = sitBv
 
                 case _: JsObject => // individual setting
-                  val res = Json.fromJson[Situation](jsn).get
-                  ???
-//                  lyaCfgView .cell() = res.lya
-//                  colrCfgView.cell() = res.color
+                  val sit = Json.fromJson[Situation](jsn).get
+                  srcCfgView  .cell() = sit.source
+                  trimCfgView .cell() = sit.trim
+                  cfgView     .cell() = sit.config
 
                 case _ =>
                   sys.error(s"Not an array or object: $jsn")
@@ -388,7 +398,7 @@ object Trunks {
           def apply(): Unit = {
             val sit = mkSituation()
             FileDialog.save(init = Some(userHome / s"trunk_${sit.hashCode.toHexString}.png")).show(None).foreach { f =>
-              val pFull = renderImage(sit, f.replaceExt("png"))
+              val pFull = renderImage(sit, f.replaceExt("png"), appConfig)
               val futTail = pFull.map { _ =>
                 val json = Situation.format.writes(sit).toString()
                 blocking {
@@ -414,7 +424,7 @@ object Trunks {
               if (optMovie.show(title = "Image Sequence Settings") == OptionPane.Result.Ok) {
                 val MovieConfig(duration, fps) = pMovie.value
                 val numFrames = (duration * fps + 0.5).toInt
-                val pFull = renderImageSequence(sitA.situation, sitB.situation, numFrames, f)
+                val pFull = renderImageSequence(sitA.situation, sitB.situation, numFrames, f, appConfig)
                 mkProgressDialog("Exporting...", pFull, pFull)
               }
             }
@@ -444,17 +454,17 @@ object Trunks {
     runSource()
   }
 
-  def renderImage(situation: Situation, f: File): Processor[Unit] = {
-    val res = new MkImage(situation, f)
+  def renderImage(situation: Situation, f: File, appConfig: AppConfig): Processor[Unit] = {
+    val res = new MkImage(situation, f, appConfig)
     res.start()
     res
   }
 
-  private class MkImage(situation: Situation, f: File)
+  private class MkImage(situation: Situation, f: File, appConfig: AppConfig)
     extends ProcessorImpl[Unit, Processor[Unit]] with Processor[Unit] {
 
     def body(): Unit = {
-      val step1   = mkImageIn(situation.source)
+      val step1   = mkImageIn(situation.source, appConfig)
       val imgIn   = await(step1, offset = 0.0, weight = 0.2)
       val step2   = mkImageCrop(imgIn, situation.trim)
       val imgTrim = await(step2, offset = 0.2, weight = 0.3)
@@ -465,13 +475,15 @@ object Trunks {
     }
   }
 
-  def renderImageSequence(sitA: Situation, sitB: Situation, numFrames: Int, f: File): Processor[Unit] = {
-    val res = new RenderImageSequence(sitA = sitA, sitB = sitB, numFrames = numFrames, f = f)
+  def renderImageSequence(sitA: Situation, sitB: Situation, numFrames: Int, f: File,
+                          appConfig: AppConfig): Processor[Unit] = {
+    val res = new RenderImageSequence(sitA = sitA, sitB = sitB, numFrames = numFrames, f = f, appConfig = appConfig)
     res.start()
     res
   }
 
-  private final class RenderImageSequence(sitA: Situation, sitB: Situation, numFrames: Int, f: File)
+  private final class RenderImageSequence(sitA: Situation, sitB: Situation, numFrames: Int, f: File,
+                                          appConfig: AppConfig)
     extends ProcessorImpl[Unit, RenderImageSequence] with Processor[Unit] {
 
     private def mkMix(w2: Double): Situation = {
@@ -533,7 +545,7 @@ object Trunks {
           val w       = frame.linlin(1, numFrames, 0, 1)
           val sitMix  = mkMix(w)
           val fFrame  = dir / s"$name-$frame.png"
-          renderImage(sitMix, fFrame)
+          renderImage(sitMix, fFrame, appConfig)
         }
         // val futGroup = Future.sequence(pGroup)
         // XXX TODO --- we need Processor.sequence
@@ -546,17 +558,17 @@ object Trunks {
     }
   }
 
-  def mkImageIn(source: Source): Processor[BufferedImage] = {
-    val res = new MkImageIn(source)
+  def mkImageIn(source: Source, appConfig: AppConfig): Processor[BufferedImage] = {
+    val res = new MkImageIn(source, appConfig)
     startAndReportProcessor(res)
   }
 
-  private class MkImageIn(source: Source)
+  private class MkImageIn(source: Source, appConfig: AppConfig)
     extends ProcessorImpl[BufferedImage, Processor[BufferedImage]] with Processor[BufferedImage] {
 
     def body(): BufferedImage = blocking {
       // val fIn     = file("trunks_vid") / "image_in" / s"trunk${source.id}t.png"
-      val fIn = file(s"/data/projects/Imperfect/TrunksMaerz09/trunk${source.id}t2.png")
+      val fIn = appConfig.trunkDir / s"trunk${source.id}t2.png"
       if (!fIn.isFile) throw new FileNotFoundException(fIn.path)
       val imgIn   = ImageIO.read(fIn)
 //      val imgOut  = cropImage(imgIn, trimLeft, trimTop,

@@ -14,6 +14,7 @@ lazy val scissDSPVersion         = "1.2.3"
 lazy val kollFlitzVersion        = "0.2.1"
 lazy val intensityPaletteVersion = "1.0.0"
 lazy val prefuseVersion          = "1.0.0"
+lazy val scoptVersion            = "3.5.0"
 
 lazy val commonSettings = Seq(
   version             := projectVersion,
@@ -75,6 +76,11 @@ lazy val collateral = Project(id = s"$baseNameL-collateral", base = file("collat
 lazy val trunks = Project(id = s"$baseNameL-trunks", base = file("trunks"))
   .dependsOn(common)
   .settings(commonSettings)
+  .settings(
+    libraryDependencies ++= Seq(
+      "com.github.scopt" %% "scopt" % scoptVersion
+    )
+  )
 
 // ---- 4 ----
 
