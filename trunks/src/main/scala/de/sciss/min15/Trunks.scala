@@ -41,7 +41,7 @@ import scala.swing.event.{ButtonClicked, MouseDragged, MouseEntered, MouseEvent,
 import scala.swing.{Action, BorderPanel, BoxPanel, Button, Component, FlowPanel, Frame, Graphics2D, Menu, MenuBar, MenuItem, Orientation, Point, ToggleButton}
 
 object Trunks {
-  case class AppConfig(trunkDir: File = file("trunks"))
+  case class AppConfig(trunkDir: File = file("trunks_vid/image_in"))
 
   def main(args: Array[String]): Unit = {
     val default = AppConfig()
