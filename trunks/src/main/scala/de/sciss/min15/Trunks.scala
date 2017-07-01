@@ -41,7 +41,8 @@ import scala.swing.event.{ButtonClicked, MouseDragged, MouseEntered, MouseEvent,
 import scala.swing.{Action, BorderPanel, BoxPanel, Button, Component, FlowPanel, Frame, Graphics2D, Menu, MenuBar, MenuItem, Orientation, Point, Slider, ToggleButton}
 
 object Trunks {
-  case class AppConfig(trunkDir: File = file("trunks_vid/image_in"))
+  case class AppConfig(trunkDir: File = file("trunks_vid/image_in"),
+                       numProcessors: Int = Runtime.getRuntime.availableProcessors())
 
   def main(args: Array[String]): Unit = {
     val default = AppConfig()
@@ -49,6 +50,10 @@ object Trunks {
       opt[File]('d', "trunk-dir")
         .text(s"Base directory for trunks (default: ${default.trunkDir})")
         .action { (f, c) => c.copy(trunkDir = f) }
+
+      opt[Int]('p', "processors")
+        .text(s"Number of concurrent threads (default: ${default.numProcessors})")
+        .action { (f, c) => c.copy(numProcessors = f) }
     }
     p.parse(args, default).fold(sys.exit(1)) { config =>
       runGUI(mkFrame(config))
@@ -558,7 +563,7 @@ object Trunks {
 
       val dir       = f.parent
       val name      = f.base
-      val clumpSz   = Runtime.getRuntime.availableProcessors()
+      val clumpSz   = appConfig.numProcessors
       val clump     = (1 to numFrames).grouped(clumpSz).toVector
       val numClumps = clump.size
 
@@ -566,11 +571,14 @@ object Trunks {
 
       clump.zipWithIndex.foreach { case (group, groupIdx) =>
         import numbers.Implicits._
-        val pGroup: Vec[Processor[Any]] = group.map { frame =>
+        val pGroup: Vec[Processor[Any]] = group.flatMap { frame =>
           val w       = frame.linlin(1, numFrames, 0, 1)
           val sitMix  = mkMix(sitA, sitB, w)
           val fFrame  = dir / s"$name-$frame.png"
-          renderImage(sitMix, fFrame, appConfig)
+          if (fFrame.length() > 0L) None else {
+            val r = renderImage(sitMix, fFrame, appConfig)
+            Some(r)
+          }
         }
         // val futGroup = Future.sequence(pGroup)
         // XXX TODO --- we need Processor.sequence
