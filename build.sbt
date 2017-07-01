@@ -29,7 +29,7 @@ lazy val commonSettings = Seq(
     "de.sciss"        %% "fileutil"           % fileUtilVersion,
     "de.sciss"        %% "numbers"            % numbersVersion,
     "de.sciss"        %% "processor"          % processorVersion,
-    "com.mortennobel" % "java-image-scaling"  % javaImageScalingVersion,  // includes jh filters
+    "com.mortennobel" %  "java-image-scaling" % javaImageScalingVersion,  // includes jh filters
     "de.sciss"        %% "audiowidgets-swing" % audioWidgetsVersion,
     "de.sciss"        %% "desktop"            % desktopVersion,
     "de.sciss"        %% "guiflitz"           % guiFlitzVersion,

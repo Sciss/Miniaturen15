@@ -37,8 +37,8 @@ import play.api.libs.json.{Format, JsArray, JsObject, Json}
 
 import scala.concurrent.blocking
 import scala.swing.Swing._
-import scala.swing.event.{ButtonClicked, MouseDragged, MouseEntered, MouseEvent, MouseExited, MouseMoved, MousePressed, MouseReleased}
-import scala.swing.{Action, BorderPanel, BoxPanel, Button, Component, FlowPanel, Frame, Graphics2D, Menu, MenuBar, MenuItem, Orientation, Point, ToggleButton}
+import scala.swing.event.{ButtonClicked, MouseDragged, MouseEntered, MouseEvent, MouseExited, MouseMoved, MousePressed, MouseReleased, ValueChanged}
+import scala.swing.{Action, BorderPanel, BoxPanel, Button, Component, FlowPanel, Frame, Graphics2D, Menu, MenuBar, MenuItem, Orientation, Point, Slider, ToggleButton}
 
 object Trunks {
   case class AppConfig(trunkDir: File = file("trunks_vid/image_in"))
@@ -144,6 +144,12 @@ object Trunks {
     def mkSituation(): Situation =
       Situation(srcCfgView.value, trimCfgView.value, cfgView.value)
 
+    def recall(sit: Situation): Unit = {
+      srcCfgView  .cell() = sit.source
+      trimCfgView .cell() = sit.trim
+      cfgView     .cell() = sit.config
+    }
+
     class SituationView(name: String) {
       var situation: Situation = mkSituation()
 
@@ -153,9 +159,7 @@ object Trunks {
       ggSave.tooltip = s"Store Settings $name"
 
       val ggLoad: Button = Button(s"< $name") {
-        srcCfgView  .cell() = situation.source
-        trimCfgView .cell() = situation.trim
-        cfgView     .cell() = situation.config
+        recall(situation)
       }
       ggLoad.tooltip = s"Recall Settings $name"
 
@@ -171,6 +175,28 @@ object Trunks {
         case ButtonClicked(_) =>
           comp.repaint()
           if (selected && !polarValid) runPolar()
+      }
+    }
+
+    // cf. https://stackoverflow.com/questions/40669506/
+    import javax.swing.UIManager
+    UIManager.put("Slider.paintValue", false)
+
+    lazy val ggInterp = new Slider {
+      min   =   0
+      max   = 256
+      value = 0
+
+      paintLabels = false
+      paintTicks  = false
+
+      listenTo(this)
+      reactions += {
+        case ValueChanged(_) =>
+          import numbers.Implicits._
+          val w   = value.linlin(min, max, 0, 1)
+          val sit = mkMix(sitA.situation, sitB.situation, w)
+          recall(sit)
       }
     }
 
@@ -382,9 +408,7 @@ object Trunks {
 
                 case _: JsObject => // individual setting
                   val sit = Json.fromJson[Situation](jsn).get
-                  srcCfgView  .cell() = sit.source
-                  trimCfgView .cell() = sit.trim
-                  cfgView     .cell() = sit.config
+                  recall(sit)
 
                 case _ =>
                   sys.error(s"Not an array or object: $jsn")
@@ -442,6 +466,7 @@ object Trunks {
           contents += trimCfgView.component
           contents += cfgView    .component
           contents += new FlowPanel(/* ggRender, */ ggPolar, sitA.component, sitB.component)
+          contents += ggInterp
         }, BorderPanel.Position.East)
       }
       resizable = false
@@ -482,45 +507,45 @@ object Trunks {
     res
   }
 
+  private def mkMix(sitA: Situation, sitB: Situation, w2: Double): Situation = {
+    val w1      = 1 - w2
+
+    val srcMix  = if (w2 < 0.5) sitA.source else sitB.source
+
+    val trimA   = sitA.trim
+    val trimB   = sitB.trim
+    val left    = trimA.left    * w1 + trimB.left   * w2
+    val top     = trimA.top     * w1 + trimB.top    * w2
+    val right   = trimA.right   * w1 + trimB.right  * w2
+    val bottom  = trimA.bottom  * w1 + trimB.bottom * w2
+    val trimMix = Trim(left = (left + 0.5).toInt, top = (top + 0.5).toInt,
+      right = (right + 0.5).toInt, bottom = (bottom + 0.5).toInt)
+
+    val c1          = sitA.config
+    val c2          = sitB.config
+    val angleStart  = c1.angleStart  * w1 + c2.angleStart  * w2
+    val angleSpan   = c1.angleSpan   * w1 + c2.angleSpan   * w2
+    val centerX     = c1.centerX     * w1 + c2.centerX     * w2
+    val centerY     = c1.centerY     * w1 + c2.centerY     * w2
+    val innerRadius = c1.innerRadius * w1 + c2.innerRadius * w2
+    val width       = c1.width       * w1 + c2.width       * w2
+    val height      = c1.height      * w1 + c2.height      * w2
+    val noise       = c1.noise       * w1 + c2.noise       * w2
+    val thresh      = c1.thresh      * w1 + c2.thresh      * w2
+    val invert      = if (w2 < 0.5) c1.invert else c2.invert
+    val flipX       = if (w2 < 0.5) c1.flipX  else c2.flipX
+    val flipY       = if (w2 < 0.5) c1.flipY  else c2.flipY
+    val cfgMix      = Config(centerX = centerX, centerY = centerY,
+      innerRadius = innerRadius, angleStart = angleStart, angleSpan = angleSpan,
+      flipX = flipX, flipY = flipY, width = (width + 0.5).toInt, height = (height + 0.5).toInt,
+      noise = (noise + 0.5).toInt, thresh = (thresh + 0.5).toInt, invert = invert)
+
+    Situation(source = srcMix, trim = trimMix, config = cfgMix)
+  }
+
   private final class RenderImageSequence(sitA: Situation, sitB: Situation, numFrames: Int, f: File,
                                           appConfig: AppConfig)
     extends ProcessorImpl[Unit, RenderImageSequence] with Processor[Unit] {
-
-    private def mkMix(w2: Double): Situation = {
-      val w1      = 1 - w2
-
-      val srcMix  = if (w2 < 0.5) sitA.source else sitB.source
-
-      val trimA   = sitA.trim
-      val trimB   = sitB.trim
-      val left    = trimA.left    * w1 + trimB.left   * w2
-      val top     = trimA.top     * w1 + trimB.top    * w2
-      val right   = trimA.right   * w1 + trimB.right  * w2
-      val bottom  = trimA.bottom  * w1 + trimB.bottom * w2
-      val trimMix = Trim(left = (left + 0.5).toInt, top = (top + 0.5).toInt,
-        right = (right + 0.5).toInt, bottom = (bottom + 0.5).toInt)
-
-      val c1          = sitA.config
-      val c2          = sitB.config
-      val angleStart  = c1.angleStart  * w1 + c2.angleStart  * w2
-      val angleSpan   = c1.angleSpan   * w1 + c2.angleSpan   * w2
-      val centerX     = c1.centerX     * w1 + c2.centerX     * w2
-      val centerY     = c1.centerY     * w1 + c2.centerY     * w2
-      val innerRadius = c1.innerRadius * w1 + c2.innerRadius * w2
-      val width       = c1.width       * w1 + c2.width       * w2
-      val height      = c1.height      * w1 + c2.height      * w2
-      val noise       = c1.noise       * w1 + c2.noise       * w2
-      val thresh      = c1.thresh      * w1 + c2.thresh      * w2
-      val invert      = if (w2 < 0.5) c1.invert else c2.invert
-      val flipX       = if (w2 < 0.5) c1.flipX  else c2.flipX
-      val flipY       = if (w2 < 0.5) c1.flipY  else c2.flipY
-      val cfgMix      = Config(centerX = centerX, centerY = centerY,
-        innerRadius = innerRadius, angleStart = angleStart, angleSpan = angleSpan,
-        flipX = flipX, flipY = flipY, width = (width + 0.5).toInt, height = (height + 0.5).toInt,
-        noise = (noise + 0.5).toInt, thresh = (thresh + 0.5).toInt, invert = invert)
-
-      Situation(source = srcMix, trim = trimMix, config = cfgMix)
-    }
 
     protected def body(): Unit = {
       val jsonF = f.replaceExt("json")
@@ -543,7 +568,7 @@ object Trunks {
         import numbers.Implicits._
         val pGroup: Vec[Processor[Any]] = group.map { frame =>
           val w       = frame.linlin(1, numFrames, 0, 1)
-          val sitMix  = mkMix(w)
+          val sitMix  = mkMix(sitA, sitB, w)
           val fFrame  = dir / s"$name-$frame.png"
           renderImage(sitMix, fFrame, appConfig)
         }
