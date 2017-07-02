@@ -41,8 +41,10 @@ import scala.swing.event.{ButtonClicked, MouseDragged, MouseEntered, MouseEvent,
 import scala.swing.{Action, BorderPanel, BoxPanel, Button, Component, FlowPanel, Frame, Graphics2D, Menu, MenuBar, MenuItem, Orientation, Point, Slider, ToggleButton}
 
 object Trunks {
-  case class AppConfig(trunkDir: File = file("trunks_vid/image_in"),
-                       numProcessors: Int = Runtime.getRuntime.availableProcessors())
+  case class AppConfig(trunkDir     : File  = file("trunks_vid/image_in"),
+                       numProcessors: Int   = Runtime.getRuntime.availableProcessors(),
+                       maxSideLen   : Int   = 32768
+                      )
 
   def main(args: Array[String]): Unit = {
     val default = AppConfig()
@@ -54,9 +56,13 @@ object Trunks {
       opt[Int]('p', "processors")
         .text(s"Number of concurrent threads (default: ${default.numProcessors})")
         .action { (f, c) => c.copy(numProcessors = f) }
+
+      opt[Int]('m', "max-side-len")
+        .text(s"Maximum side-length during scaling (default: ${default.maxSideLen})")
+        .action { (f, c) => c.copy(maxSideLen = f) }
     }
-    p.parse(args, default).fold(sys.exit(1)) { config =>
-      runGUI(mkFrame(config))
+    p.parse(args, default).fold(sys.exit(1)) { implicit config =>
+      runGUI(mkFrame())
     }
   }
 
@@ -102,7 +108,7 @@ object Trunks {
                     flipX: Boolean, flipY: Boolean,
                     width: Int, height: Int, noise: Int, thresh: Int, invert: Boolean)
 
-  def mkFrame(appConfig: AppConfig): Unit = {
+  def mkFrame()(implicit appConfig: AppConfig): Unit = {
     val hAxis1  = new Axis(Orientation.Horizontal)
     val vAxis1  = new Axis(Orientation.Vertical  )
     val hAxis2  = new Axis(Orientation.Horizontal)
@@ -355,7 +361,7 @@ object Trunks {
 
     def runSource(): Unit = {
       procSource.foreach(_.abort())
-      val proc    = mkImageIn(srcCfgView.value, appConfig)
+      val proc    = mkImageIn(srcCfgView.value)
       procSource  = Some(proc)
       proc.foreach { _ =>
         onEDT(runTrim())
@@ -427,7 +433,7 @@ object Trunks {
           def apply(): Unit = {
             val sit = mkSituation()
             FileDialog.save(init = Some(userHome / s"trunk_${sit.hashCode.toHexString}.png")).show(None).foreach { f =>
-              val pFull = renderImage(sit, f.replaceExt("png"), appConfig)
+              val pFull = renderImage(sit, f.replaceExt("png"))
               val futTail = pFull.map { _ =>
                 val json = Situation.format.writes(sit).toString()
                 blocking {
@@ -453,7 +459,7 @@ object Trunks {
               if (optMovie.show(title = "Image Sequence Settings") == OptionPane.Result.Ok) {
                 val MovieConfig(duration, fps) = pMovie.value
                 val numFrames = (duration * fps + 0.5).toInt
-                val pFull = renderImageSequence(sitA.situation, sitB.situation, numFrames, f, appConfig)
+                val pFull = renderImageSequence(sitA.situation, sitB.situation, numFrames, f)
                 mkProgressDialog("Exporting...", pFull, pFull)
               }
             }
@@ -484,17 +490,17 @@ object Trunks {
     runSource()
   }
 
-  def renderImage(situation: Situation, f: File, appConfig: AppConfig): Processor[Unit] = {
-    val res = new MkImage(situation, f, appConfig)
+  def renderImage(situation: Situation, f: File)(implicit appConfig: AppConfig): Processor[Unit] = {
+    val res = new MkImage(situation, f)
     res.start()
     res
   }
 
-  private class MkImage(situation: Situation, f: File, appConfig: AppConfig)
+  private class MkImage(situation: Situation, f: File)(implicit appConfig: AppConfig)
     extends ProcessorImpl[Unit, Processor[Unit]] with Processor[Unit] {
 
     def body(): Unit = {
-      val step1   = mkImageIn(situation.source, appConfig)
+      val step1   = mkImageIn(situation.source)
       val imgIn   = await(step1, offset = 0.0, weight = 0.2)
       val step2   = mkImageCrop(imgIn, situation.trim)
       val imgTrim = await(step2, offset = 0.2, weight = 0.3)
@@ -505,9 +511,9 @@ object Trunks {
     }
   }
 
-  def renderImageSequence(sitA: Situation, sitB: Situation, numFrames: Int, f: File,
-                          appConfig: AppConfig): Processor[Unit] = {
-    val res = new RenderImageSequence(sitA = sitA, sitB = sitB, numFrames = numFrames, f = f, appConfig = appConfig)
+  def renderImageSequence(sitA: Situation, sitB: Situation, numFrames: Int, f: File)
+                         (implicit appConfig: AppConfig): Processor[Unit] = {
+    val res = new RenderImageSequence(sitA = sitA, sitB = sitB, numFrames = numFrames, f = f)
     res.start()
     res
   }
@@ -548,8 +554,8 @@ object Trunks {
     Situation(source = srcMix, trim = trimMix, config = cfgMix)
   }
 
-  private final class RenderImageSequence(sitA: Situation, sitB: Situation, numFrames: Int, f: File,
-                                          appConfig: AppConfig)
+  private final class RenderImageSequence(sitA: Situation, sitB: Situation, numFrames: Int, f: File)
+                                         (implicit appConfig: AppConfig)
     extends ProcessorImpl[Unit, RenderImageSequence] with Processor[Unit] {
 
     protected def body(): Unit = {
@@ -576,7 +582,7 @@ object Trunks {
           val sitMix  = mkMix(sitA, sitB, w)
           val fFrame  = dir / s"$name-$frame.png"
           if (fFrame.length() > 0L) None else {
-            val r = renderImage(sitMix, fFrame, appConfig)
+            val r = renderImage(sitMix, fFrame)
             Some(r)
           }
         }
@@ -591,12 +597,12 @@ object Trunks {
     }
   }
 
-  def mkImageIn(source: Source, appConfig: AppConfig): Processor[BufferedImage] = {
-    val res = new MkImageIn(source, appConfig)
+  def mkImageIn(source: Source)(implicit appConfig: AppConfig): Processor[BufferedImage] = {
+    val res = new MkImageIn(source)
     startAndReportProcessor(res)
   }
 
-  private class MkImageIn(source: Source, appConfig: AppConfig)
+  private class MkImageIn(source: Source)(implicit appConfig: AppConfig)
     extends ProcessorImpl[BufferedImage, Processor[BufferedImage]] with Processor[BufferedImage] {
 
     def body(): BufferedImage = blocking {
@@ -630,12 +636,14 @@ object Trunks {
   }
 
   /** @param source the already trimmed image */
-  def mkImagePolar(source: BufferedImage, trim: Trim, config: Config, fast: Boolean): Processor[BufferedImage] = {
+  def mkImagePolar(source: BufferedImage, trim: Trim, config: Config, fast: Boolean)
+                  (implicit appConfig: AppConfig): Processor[BufferedImage] = {
     val res = new MkImagePolar(source, trim, config, fast = fast)
     startAndReportProcessor(res)
   }
 
   private class MkImagePolar(source: BufferedImage, trim: Trim, config: Config, fast: Boolean)
+                            (implicit appConfig: AppConfig)
     extends ProcessorImpl[BufferedImage, Processor[BufferedImage]] with Processor[BufferedImage] {
 
     def body(): BufferedImage = blocking {
@@ -650,8 +658,8 @@ object Trunks {
         val ryMin       = math.min(cy, 1.0 - cy) * ih
         val rMin        = math.min(rxMin, ryMin)
         val scale       = config.height / rMin
-        val scaleW      = (iw * scale + 0.5).toInt
-        val scaleH      = (ih * scale + 0.5).toInt
+        val scaleW      = math.min(appConfig.maxSideLen, (iw * scale + 0.5).toInt)
+        val scaleH      = math.min(appConfig.maxSideLen, (ih * scale + 0.5).toInt)
         val resampleOp  = new ResampleOp(scaleW, scaleH)
         resampleOp.filter(source, null)
       }
