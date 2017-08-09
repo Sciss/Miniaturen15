@@ -83,7 +83,7 @@ object Trunks {
 
    */
 
-  case class MovieConfig(duration: Double = 60.0, fps: Int = 25)
+  case class MovieConfig(duration: Double = 60.0, fps: Int = 25, rtz: Boolean = false)
 
   object Situation {
     implicit val format : Format[Situation]               = AutoFormat[Situation]
@@ -457,9 +457,9 @@ object Trunks {
               val optMovie  = OptionPane.confirmation(message = pMovie.component,
                 optionType = OptionPane.Options.OkCancel)
               if (optMovie.show(title = "Image Sequence Settings") == OptionPane.Result.Ok) {
-                val MovieConfig(duration, fps) = pMovie.value
+                val MovieConfig(duration, fps, rtz) = pMovie.value
                 val numFrames = (duration * fps + 0.5).toInt
-                val pFull = renderImageSequence(sitA.situation, sitB.situation, numFrames, f)
+                val pFull = renderImageSequence(sitA.situation, sitB.situation, numFrames, f, rtz = rtz)
                 mkProgressDialog("Exporting...", pFull, pFull)
               }
             }
@@ -511,9 +511,9 @@ object Trunks {
     }
   }
 
-  def renderImageSequence(sitA: Situation, sitB: Situation, numFrames: Int, f: File)
+  def renderImageSequence(sitA: Situation, sitB: Situation, numFrames: Int, f: File, rtz: Boolean)
                          (implicit appConfig: AppConfig): Processor[Unit] = {
-    val res = new RenderImageSequence(sitA = sitA, sitB = sitB, numFrames = numFrames, f = f)
+    val res = new RenderImageSequence(sitA = sitA, sitB = sitB, numFrames = numFrames, f = f, rtz = rtz)
     res.start()
     res
   }
@@ -554,11 +554,13 @@ object Trunks {
     Situation(source = srcMix, trim = trimMix, config = cfgMix)
   }
 
-  private final class RenderImageSequence(sitA: Situation, sitB: Situation, numFrames: Int, f: File)
+  private final class RenderImageSequence(sitA: Situation, sitB: Situation, numFrames: Int, f: File, rtz: Boolean)
                                          (implicit appConfig: AppConfig)
     extends ProcessorImpl[Unit, RenderImageSequence] with Processor[Unit] {
 
     protected def body(): Unit = {
+      import numbers.Implicits._
+
       val jsonF = f.replaceExt("json")
       if (!jsonF.exists()) blocking {
         val json    = Situation.format2.writes((sitA, sitB)).toString()
@@ -575,11 +577,32 @@ object Trunks {
 
       val fWeight   = 1.0 / numClumps
 
+      val (numFramesForth, sitC) = if (!rtz) (numFrames, sitB) else {
+        val a1    = sitA.config.angleStart
+        val a2    = sitB.config.angleStart
+        val ar0   = math.max(a1, a2) - math.min(a1, a2)
+        val ar1   = (ar0 * 2).roundTo(360.0)
+        val ar2   = if (ar1 > ar0) ar1 else ar1 + 360.0
+        val ar    = if (a1 < a2) ar2 else -ar2
+        val n     = (numFrames * ar0 / ar).round.toInt
+        val _sitC = sitA.copy(config = sitA.config.copy(angleStart = a1 + ar))
+        (n, _sitC)
+      }
+
       clump.zipWithIndex.foreach { case (group, groupIdx) =>
-        import numbers.Implicits._
         val pGroup: Vec[Processor[Any]] = group.flatMap { frame =>
-          val w       = frame.linlin(1, numFrames, 0, 1)
-          val sitMix  = mkMix(sitA, sitB, w)
+          val sitMix  = if (rtz) {
+            if (frame <= numFramesForth) {
+              val w = frame.linlin(1, numFramesForth, 0, 1)
+              mkMix(sitA, sitB, w)
+            } else {
+              val w = frame.linlin(numFramesForth, numFrames, 0, 1)
+              mkMix(sitB, sitC, w)
+            }
+          } else {
+            val w = frame.linlin(1, numFrames, 0, 1)
+            mkMix(sitA, sitB, w)
+          }
           val fFrame  = dir / s"$name-$frame.png"
           if (fFrame.length() > 0L) None else {
             val r = renderImage(sitMix, fFrame)
