@@ -584,7 +584,7 @@ object Trunks {
         val ar1   = (ar0 * 2).roundTo(360.0)
         val ar2   = if (ar1 > ar0) ar1 else ar1 + 360.0
         val ar    = if (a1 < a2) ar2 else -ar2
-        val n     = (numFrames * ar0 / ar).round.toInt
+        val n     = (numFrames * ar0 / ar.abs).round.toInt
         val _sitC = sitA.copy(config = sitA.config.copy(angleStart = a1 + ar))
         (n, _sitC)
       }
