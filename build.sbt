@@ -1,6 +1,6 @@
 lazy val baseName                = "Miniaturen15"
 lazy val baseNameL               = baseName.toLowerCase
-lazy val projectVersion          = "0.3.1-SNAPSHOT"
+lazy val projectVersion          = "0.3.1"
 
 lazy val fileUtilVersion         = "1.1.3"
 lazy val numbersVersion          = "0.1.3"
